@@ -32,6 +32,9 @@ public class KinescopePlayerView: UIView {
     private var playingRateProvider: SideMenuItemsProvider?
     private var qualityProvider: SideMenuItemsProvider?
     private var subtitlesProvider: SideMenuItemsProvider?
+    
+    private var playImageView: UIImageView = UIImageView()
+    private var playBackgroundCircle = UIView()
 
     private lazy var overlayDebouncer = Debouncer(timeInterval: overlay?.duration ?? 0.0)
 
@@ -66,16 +69,33 @@ public class KinescopePlayerView: UIView {
     }
 
     // MARK: - Internal Methods
+    
+    func showPlayButton() {
+        playImageView.isHidden = false
+        playBackgroundCircle.isHidden = false
+    }
+    
+    func hidePlayButton() {
+        playImageView.isHidden = true
+        playBackgroundCircle.isHidden = true
+    }
+    
+    func hidePlayButtonAnimated() {
+        playImageView.hideAnimated()
+        playBackgroundCircle.hideAnimated()
+    }
 
     func startLoader() {
         overlay?.isHidden = true
         previewView.isHidden = false
+        hidePlayButton()
         progressView.showVideoProgress(isLoading: true)
     }
 
     func stopLoader(withPreview: Bool = true) {
         progressView.showVideoProgress(isLoading: false)
         previewView.isHidden = withPreview
+        hidePlayButton()
         overlay?.isHidden = false
     }
 
@@ -133,6 +153,7 @@ public extension KinescopePlayerView {
 
         configurePlayerView(with: config.gravity)
         configurePreviewView()
+        configurePlayView()
         configureAnnounce(with: config.announceSnack)
 
         if let overlay = config.overlay {
@@ -182,6 +203,21 @@ private extension KinescopePlayerView {
         stretch(view: playerView)
 
         self.playerView = playerView
+    }
+    
+    func configurePlayView() {
+        playImageView.image = config?.overlay?.playImage
+        
+        playBackgroundCircle.layer.cornerRadius = config?.overlay?.playBackgroundRadius ?? 0;
+        playBackgroundCircle.backgroundColor = config?.overlay?.playBackgroundColor
+        
+        addSubviews(playBackgroundCircle, playImageView)
+        playBackgroundCircle.squareSize(with: (config?.overlay?.playBackgroundRadius ?? 0) * 2)
+        
+        addSubview(playImageView)
+        
+        centerChild(view: playBackgroundCircle)
+        centerChild(view: playImageView)
     }
 
     func configurePreviewView() {

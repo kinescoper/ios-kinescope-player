@@ -156,6 +156,10 @@ public class KinescopeVideoPlayer: KinescopePlayer, KinescopePlayerBody, Fullscr
             self.load()
         }
     }
+    
+    public func preload() {
+        self.loadPoster();
+    }
 
     public func pause() {
         self.strategy.pause()
@@ -230,6 +234,40 @@ public class KinescopeVideoPlayer: KinescopePlayer, KinescopePlayerBody, Fullscr
 // MARK: - Private
 
 private extension KinescopeVideoPlayer {
+    
+    @objc
+    func singleTapAction(recognizer: UITapGestureRecognizer) {
+        view?.hidePlayButtonAnimated()
+        delegate?.playerDidLoadVideo(error: nil)
+        didPlay();
+    }
+    
+    func loadPoster() {
+        view?.overlay?.isHidden = true
+        view?.previewView.isHidden = false
+        view?.showPlayButton()
+        
+        let singleTapGestureRecognizer = UITapGestureRecognizer(target: self,
+                                                             action: #selector(singleTapAction))
+        singleTapGestureRecognizer.numberOfTapsRequired = 1
+        
+        view?.addGestureRecognizer(singleTapGestureRecognizer)
+        
+        dependencies.inspector.video(
+            id: config.videoId,
+            onSuccess: { [weak self] video in
+                self?.video = video
+                self?.view?.set(preview: video.poster?.url)
+                self?.view?.overlay?.set(title: video.title, subtitle: video.description)
+                self?.view?.set(options: self?.makePlayerOptions(from: video) ?? [])
+            },
+            onError: { [weak self] error in
+                self?.view?.errorOverlay?.display(error: error)
+                self?.delegate?.playerDidLoadVideo(error: error)
+                Kinescope.shared.logger?.log(error: error, level: KinescopeLoggerLevel.network)
+            }
+        )
+    }
 
     /// Sends request video by id and sets player's item
     func load() {
