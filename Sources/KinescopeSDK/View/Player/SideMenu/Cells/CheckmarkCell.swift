@@ -46,6 +46,15 @@ final class CheckmarkCell: UITableViewCell {
 
     // MARK: - Internal Methods
 
+    /// The theme's glyph; `nil` keeps the bundled one.
+    func set(icon: UIImage?, tintColor: UIColor) {
+        guard let icon else {
+            return
+        }
+        iconView?.image = icon
+        iconView?.tintColor = tintColor
+    }
+
     func configure(with model: Model) {
         self.model = model
 

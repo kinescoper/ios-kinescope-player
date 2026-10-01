@@ -5,20 +5,31 @@
 //  Created by Никита Гагаринов on 13.04.2021.
 //
 
+import AVFoundation
 import AVKit
 import MediaPlayer
 
 final class AirPlayOptionControl: UIControl {
 
+    private let theme: KinescopePlayerTheme
+    /// A supplied glyph over the system route picker, which cannot take an image of its own.
+    private let glyphView = UIImageView()
+
     // MARK: - Initialization
 
-    init() {
+    init(theme: KinescopePlayerTheme = .default, tintColor: UIColor = .white) {
+        self.theme = theme
         super.init(frame: .zero)
+        self.tintColor = tintColor
         setupInitialState()
 
         NotificationCenter.default.addObserver(self,
                                                selector: #selector(didAirPlayStateChanged),
                                                name: .MPVolumeViewWirelessRouteActiveDidChange,
+                                               object: nil)
+        NotificationCenter.default.addObserver(self,
+                                               selector: #selector(didAudioRouteChange),
+                                               name: AVAudioSession.routeChangeNotification,
                                                object: nil)
     }
 
@@ -36,12 +47,21 @@ final class AirPlayOptionControl: UIControl {
 
 private extension AirPlayOptionControl {
 
+    var hasCustomGlyph: Bool {
+        theme.icons.custom(.airPlay) != nil
+    }
+
     func setupInitialState() {
         let systemView: UIView
         if #available(iOS 11.0, *) {
             let routePickerView = AVRoutePickerView()
             if #available(iOS 13.0, *) {
                 routePickerView.prioritizesVideoDevices = true
+            }
+            if hasCustomGlyph {
+                // The picker keeps the taps; its own glyph is hidden under the supplied one.
+                routePickerView.tintColor = .clear
+                routePickerView.activeTintColor = .clear
             }
             systemView = routePickerView
         } else {
@@ -53,10 +73,24 @@ private extension AirPlayOptionControl {
 
         addSubview(systemView)
         stretch(view: systemView)
+
+        if hasCustomGlyph {
+            glyphView.contentMode = .center
+            glyphView.isUserInteractionEnabled = false
+            addSubview(glyphView)
+            stretch(view: glyphView)
+            updateGlyph()
+        }
     }
 
     func getImageName(for volumeView: MPVolumeView) -> String {
         return volumeView.isWirelessRouteActive ? "airPlayActive" : "airPlay"
+    }
+
+    func updateGlyph() {
+        let isActive = AVAudioSession.sharedInstance().currentRoute.outputs.contains { $0.portType == .airPlay }
+        let icon: KinescopePlayerIcon = isActive && theme.icons.custom(.airPlayActive) != nil ? .airPlayActive : .airPlay
+        glyphView.image = theme.icons.image(for: icon)?.scaled(by: theme.metrics.iconGlyphScale)
     }
 
     @objc
@@ -65,6 +99,16 @@ private extension AirPlayOptionControl {
             return
         }
         volumeView.setRouteButtonImage(UIImage.image(named: getImageName(for: volumeView)), for: .normal)
+    }
+
+    @objc
+    func didAudioRouteChange(_ notification: NSNotification) {
+        guard hasCustomGlyph else {
+            return
+        }
+        DispatchQueue.main.async { [weak self] in
+            self?.updateGlyph()
+        }
     }
 
 }

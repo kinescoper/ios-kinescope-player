@@ -11,14 +11,30 @@ final class OptionButton: UIButton {
 
     let option: KinescopePlayerOption
 
-    init(option: KinescopePlayerOption) {
+    private let theme: KinescopePlayerTheme
+    private let normalColor: UIColor
+
+    init(option: KinescopePlayerOption,
+         theme: KinescopePlayerTheme = .default,
+         normalColor: UIColor = .white,
+         isFullscreen: Bool = false) {
         self.option = option
+        self.theme = theme
+        self.normalColor = normalColor
         super.init(frame: .zero)
-        setupInitialState()
+        setupInitialState(isFullscreen: isFullscreen)
     }
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    // MARK: - UIButton
+
+    override var isHighlighted: Bool {
+        didSet {
+            updateTint()
+        }
     }
 
 }
@@ -27,9 +43,75 @@ final class OptionButton: UIButton {
 
 private extension OptionButton {
 
-    func setupInitialState() {
-        setImage(option.icon, for: .normal)
-        setImage(option.iconSelected, for: .selected)
+    func setupInitialState(isFullscreen: Bool) {
+        let scale = theme.metrics.iconGlyphScale
+        let icons = theme.icons
+        let themeIcon = option.themeIcon(isFullscreen: isFullscreen)
+        let custom = themeIcon.flatMap { icons.custom($0) }
+
+        let normalImage = themeIcon.flatMap { icons.image(for: $0) } ?? option.icon
+        setImage(custom == nil ? normalImage : normalImage.scaled(by: scale), for: .normal)
+
+        let selectedIcon = option.selectedThemeIcon
+        if let selectedIcon, let selectedImage = icons.image(for: selectedIcon) {
+            let image = icons.custom(selectedIcon) == nil ? selectedImage : selectedImage.scaled(by: scale)
+            setImage(image, for: .selected)
+            setImage(image, for: [.selected, .highlighted])
+        } else if let iconSelected = option.iconSelected {
+            setImage(iconSelected, for: .selected)
+        }
+
+        // A pressed icon changes its color, without a background (docs: tap states of elements without a fill).
+        if theme.colors.iconPressed != nil {
+            adjustsImageWhenHighlighted = false
+        }
+        imageView?.contentMode = .center
+        updateTint()
+    }
+
+    func updateTint() {
+        let pressed = theme.colors.iconPressed
+        tintColor = isHighlighted ? (pressed ?? normalColor) : normalColor
+    }
+
+}
+
+// MARK: - Theme icons
+
+extension KinescopePlayerOption {
+
+    func themeIcon(isFullscreen: Bool) -> KinescopePlayerIcon? {
+        switch self {
+        case .more:
+            return .more
+        case .fullscreen:
+            return isFullscreen ? .exitFullscreen : .fullscreen
+        case .settings:
+            return .settings
+        case .attachments:
+            return .attachments
+        case .download:
+            return .download
+        case .airPlay:
+            return .airPlay
+        case .subtitles:
+            return .subtitles
+        case .pip:
+            return .pip
+        case .custom:
+            return nil
+        }
+    }
+
+    var selectedThemeIcon: KinescopePlayerIcon? {
+        switch self {
+        case .subtitles:
+            return .subtitlesOn
+        case .airPlay:
+            return .airPlayActive
+        default:
+            return nil
+        }
     }
 
 }

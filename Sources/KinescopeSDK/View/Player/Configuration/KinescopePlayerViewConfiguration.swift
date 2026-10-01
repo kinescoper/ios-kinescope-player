@@ -20,6 +20,7 @@ public struct KinescopePlayerViewConfiguration {
     let sideMenu: KinescopeSideMenuConfiguration
     let shadowOverlay: KinescopePlayerShadowOverlayConfiguration?
     let announceSnack: KinescopeAnnounceConfiguration
+    let theme: KinescopePlayerTheme
     
     /// - parameter gravity: `AVLayerVideoGravity` value defines how the video is displayed within a layer’s bounds rectangle
     /// - parameter previewService: Implementation of service to load posters into imageView. Set `nil` to disable previews.
@@ -33,6 +34,8 @@ public struct KinescopePlayerViewConfiguration {
     /// - parameter sideMenu: Configuration of side menu with setings
     /// - parameter shadowOverlay: Configuration of shadow overlay beneath side menu
     /// - parameter announceSnack: Configuration of snack bar to announce events.
+    /// - parameter theme: Icons, pressed states and geometry of the chrome that the nested configurations do not
+    /// cover. To derive the nested configurations from a theme too, use `themed(_:)`.
     public init(gravity: AVLayerVideoGravity,
                 previewService: PreviewService?,
                 activityIndicator: KinescopeActivityIndicator,
@@ -41,7 +44,8 @@ public struct KinescopePlayerViewConfiguration {
                 errorOverlay: KinescopeErrorConfiguration?,
                 sideMenu: KinescopeSideMenuConfiguration,
                 shadowOverlay: KinescopePlayerShadowOverlayConfiguration?,
-                announceSnack: KinescopeAnnounceConfiguration) {
+                announceSnack: KinescopeAnnounceConfiguration,
+                theme: KinescopePlayerTheme = .default) {
         self.gravity = gravity
         self.previewService = previewService
         self.activityIndicator = activityIndicator
@@ -51,6 +55,7 @@ public struct KinescopePlayerViewConfiguration {
         self.sideMenu = sideMenu
         self.shadowOverlay = shadowOverlay
         self.announceSnack = announceSnack
+        self.theme = theme
     }
     
 }
@@ -74,6 +79,78 @@ public extension KinescopePlayerViewConfiguration {
         shadowOverlay: .default,
         announceSnack: .default
     )
+
+    /// Configuration drawn with `theme`: the nested configurations take their colors, fonts, sizes and images
+    /// from it, the rest of the chrome reads the theme directly.
+    static func themed(_ theme: KinescopePlayerTheme) -> Self {
+        let colors = theme.colors
+        let fonts = theme.fonts
+        let metrics = theme.metrics
+        let image = { (icon: KinescopePlayerIcon) in theme.icons.image(for: icon) ?? UIImage() }
+        return .builder()
+            .setOverlay(
+                KinescopePlayerOverlayConfigurationBuilder(configuration: .default)
+                    .setPlayImage(image(.play))
+                    .setPauseImage(image(.pause))
+                    .setFastForwardImage(image(.fastForward))
+                    .setFastBackwardImage(image(.fastBackward))
+                    .setPlayBackgroundRadius(metrics.playButtonDiameter / 2)
+                    .setPlayBackgroundColor(colors.playButtonBackground)
+                    .setBackgroundColor(colors.overlayDim)
+                    .setNameConfiguration(
+                        KinescopeVideoNameConfigurationBuilder(configuration: .default)
+                            .setTitleFont(fonts.title)
+                            .setTitleColor(colors.title)
+                            .setSubtitleFont(fonts.subtitle)
+                            .setSubtitleColor(colors.title)
+                            .build()
+                    )
+                    .build()
+            )
+            .setControlPanel(
+                .builder()
+                    .setPreferedHeight(metrics.controlBarHeight)
+                    .setTimeIndicator(
+                        .builder()
+                            .setColor(colors.text)
+                            .setFontSize(fonts.time.pointSize)
+                            .build()
+                    )
+                    .setTimeline(
+                        .builder()
+                            .setActiveColor(colors.timelineProgress)
+                            .setInactiveColor(colors.timelineTrack)
+                            .setLineHeight(metrics.timelineHeight)
+                            .setCircleRadius(metrics.timelineThumbRadius)
+                            .build()
+                    )
+                    .setOptionsMenu(
+                        .builder()
+                            .setNormalColor(colors.icon)
+                            .setHighlightedColor(colors.iconPressed ?? KinescopePlayerOptionsConfiguration.default.highlightedColor)
+                            .setIconSize(metrics.optionSize)
+                            .build()
+                    )
+                    .build()
+            )
+            .setSideMenu(
+                .builder()
+                    .setItem(
+                        .builder()
+                            .setTitleFont(fonts.menuItem)
+                            .setValueFont(fonts.menuValue)
+                            .build()
+                    )
+                    .setBar(
+                        .builder()
+                            .setTitleFont(fonts.menuTitle)
+                            .build()
+                    )
+                    .build()
+            )
+            .setTheme(theme)
+            .build()
+    }
 
     static func accentTimeLineAndPlayButton(with color: UIColor) -> Self {
         .builder()
@@ -109,6 +186,7 @@ public class KinescopePlayerViewConfigurationBuilder {
     private var sideMenu: KinescopeSideMenuConfiguration
     private var shadowOverlay: KinescopePlayerShadowOverlayConfiguration?
     private var announceSnack: KinescopeAnnounceConfiguration
+    private var theme: KinescopePlayerTheme
     
     public init(configuration: KinescopePlayerViewConfiguration = .default) {
         self.gravity = configuration.gravity
@@ -120,6 +198,7 @@ public class KinescopePlayerViewConfigurationBuilder {
         self.sideMenu = configuration.sideMenu
         self.shadowOverlay = configuration.shadowOverlay
         self.announceSnack = configuration.announceSnack
+        self.theme = configuration.theme
     }
     
     public func setGravity(_ gravity: AVLayerVideoGravity) -> Self {
@@ -167,6 +246,12 @@ public class KinescopePlayerViewConfigurationBuilder {
         return self
     }
     
+    /// Theme for what the nested configurations do not cover; they stay as set. See `KinescopePlayerTheme`.
+    public func setTheme(_ theme: KinescopePlayerTheme) -> Self {
+        self.theme = theme
+        return self
+    }
+    
     public func build() -> KinescopePlayerViewConfiguration {
         .init(
             gravity: gravity,
@@ -177,7 +262,8 @@ public class KinescopePlayerViewConfigurationBuilder {
             errorOverlay: errorOverlay,
             sideMenu: sideMenu,
             shadowOverlay: shadowOverlay,
-            announceSnack: announceSnack
+            announceSnack: announceSnack,
+            theme: theme
         )
     }
 }

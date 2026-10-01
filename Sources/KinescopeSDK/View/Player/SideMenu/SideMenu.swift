@@ -85,12 +85,14 @@ final class SideMenu: UIView {
 
     private let config: KinescopeSideMenuConfiguration
     private let model: Model
+    private let theme: KinescopePlayerTheme
 
     // MARK: - Init
 
-    init(config: KinescopeSideMenuConfiguration, model: Model) {
+    init(config: KinescopeSideMenuConfiguration, model: Model, theme: KinescopePlayerTheme = .default) {
         self.config = config
         self.model = model
+        self.theme = theme
         super.init(frame: .zero)
         setupInitialState()
     }
@@ -115,6 +117,7 @@ extension SideMenu: UITableViewDataSource {
             (cell as? DisclosureCell)?.configure(with: .init(title: title,
                                                              value: value,
                                                              config: config.item))
+            (cell as? DisclosureCell)?.set(icon: theme.icons.image(for: .menuDisclosure), tintColor: theme.colors.icon)
             return cell
         case .checkmark(let title, let selected):
             let cell = tableView.dequeueReusableCell(withIdentifier: CheckmarkCell.description(),
@@ -122,6 +125,7 @@ extension SideMenu: UITableViewDataSource {
             (cell as? CheckmarkCell)?.configure(with: .init(title: title,
                                                             selected: selected,
                                                             config: config.item))
+            (cell as? CheckmarkCell)?.set(icon: theme.icons.image(for: .menuCheckmark), tintColor: theme.colors.icon)
             return cell
         case .description(_, let title, let value):
             let cell = tableView.dequeueReusableCell(withIdentifier: DescriptionCell.description(),
@@ -217,6 +221,7 @@ private extension SideMenu {
 
     func configureBar() {
         let bar = SideMenuBar(config: config.bar,
+                              theme: theme,
                               model: .init(title: model.title, isRoot: model.isRoot, isDownloadable: model.isDownloadable))
 
         addSubview(bar)

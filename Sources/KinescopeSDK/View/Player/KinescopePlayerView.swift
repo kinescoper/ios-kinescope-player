@@ -38,6 +38,8 @@ public class KinescopePlayerView: UIView {
     // MARK: - Internal Properties
 
     weak var delegate: KinescopePlayerViewDelegate?
+    /// Set by the full screen controller before the layout: the full screen option shows its exit icon.
+    var isFullscreenHost = false
     var canBeFullScreen: Bool {
         return controlPanel?.optionsMenu.options.contains(.fullscreen) ?? false
     }
@@ -201,7 +203,7 @@ private extension KinescopePlayerView {
     }
 
     func configureControlPanel(with config: KinescopeControlPanelConfiguration) {
-        let controlPanel = PlayerControlView(config: config)
+        let controlPanel = PlayerControlView(config: config, theme: self.config.theme, isFullscreen: isFullscreenHost)
         addSubview(controlPanel)
         bottomChildWithSafeArea(view: controlPanel)
         controlPanel.isHidden = true
@@ -211,7 +213,7 @@ private extension KinescopePlayerView {
     }
 
     func configureOverlay(with config: KinescopePlayerOverlayConfiguration) {
-        let overlay = PlayerOverlayView(config: config, delegate: self)
+        let overlay = PlayerOverlayView(config: config, theme: self.config.theme, delegate: self)
         overlay.isHidden = true
         addSubview(overlay)
         stretch(view: overlay)
@@ -371,7 +373,7 @@ private extension KinescopePlayerView {
     }
 
     func presentSideMenu(model: SideMenu.Model) {
-        let sideMenu = SideMenu(config: config.sideMenu, model: model)
+        let sideMenu = SideMenu(config: config.sideMenu, model: model, theme: config.theme)
         sideMenu.delegate = self
         sideMenuCoordinator.present(view: sideMenu, in: self, animated: true)
         showOverlay(false)

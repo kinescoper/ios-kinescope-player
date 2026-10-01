@@ -32,14 +32,16 @@ final class SideMenuBar: UIView {
     // MARK: - Properties
 
     private let config: KinescopeSideMenuBarConfiguration
+    private let theme: KinescopePlayerTheme
     private let model: Model
 
     weak var delegate: SideMenuBarDelegate?
 
     // MARK: - Init
 
-    init(config: KinescopeSideMenuBarConfiguration, model: Model) {
+    init(config: KinescopeSideMenuBarConfiguration, theme: KinescopePlayerTheme = .default, model: Model) {
         self.config = config
+        self.theme = theme
         self.model = model
         super.init(frame: .zero)
         setupInitialState()
@@ -133,7 +135,8 @@ private extension SideMenuBar {
 
     func configureCloseButton() {
         let button = UIButton()
-        button.setImage(.image(named: "close"), for: .normal)
+        button.setImage(theme.icons.image(for: .menuClose), for: .normal)
+        button.tintColor = theme.colors.icon
 
         addSubview(button)
         button.squareSize(with: config.iconSize)
@@ -145,7 +148,8 @@ private extension SideMenuBar {
 
     func configureBackButton() {
         let button = UIButton()
-        button.setImage(.image(named: "back"), for: .normal)
+        button.setImage(theme.icons.image(for: .menuBack), for: .normal)
+        button.tintColor = theme.colors.icon
 
         addSubview(button)
         button.squareSize(with: config.iconSize)

@@ -42,17 +42,33 @@ class TimelineView: UIControl {
     private weak var preloadProgress: UIView!
 
     private let config: KinescopePlayerTimelineConfiguration
+    private let theme: KinescopePlayerTheme
 
     private var isTouching = false {
         didSet {
             activeCircleView.isHidden = !isTouching
+            circleView.isHidden = !(isTouching || showsIdleThumb)
         }
     }
 
+    private var showsIdleThumb: Bool {
+        theme.metrics.timelineThumbVisibleWhenIdle
+    }
+
+    /// Track inset from each edge: room for the thumb when it is always shown.
+    private var trackInset: CGFloat {
+        showsIdleThumb ? config.circleRadius : .zero
+    }
+
+    /// Last positions, to lay the parts out again when the size changes.
+    private var position: CGFloat = .zero
+    private var bufferedProgress: CGFloat = .zero
+
     weak var output: TimelineOutput?
 
-    init(config: KinescopePlayerTimelineConfiguration) {
+    init(config: KinescopePlayerTimelineConfiguration, theme: KinescopePlayerTheme = .default) {
         self.config = config
+        self.theme = theme
         super.init(frame: .zero)
         setupInitialState(with: config)
 
@@ -64,6 +80,20 @@ class TimelineView: UIControl {
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        if !isTouching {
+            updateFrames(with: getCoordinateFrom(current: position))
+        }
+        updatePreloadFrames(with: getCoordinateFrom(preload: bufferedProgress))
+    }
+
+    /// A thin bar still takes taps at least 44 points tall.
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        let extra = max(0, (44 - bounds.height) / 2)
+        return bounds.insetBy(dx: 0, dy: -extra).contains(point)
     }
 
 }
@@ -110,12 +140,14 @@ extension TimelineView: TimelineInput {
         guard !isTouching else {
             return
         }
+        self.position = position
 
         let coordinate = getCoordinateFrom(current: position)
         updateFrames(with: coordinate)
     }
 
     func setBufferred(progress: CGFloat) {
+        bufferedProgress = progress
         let coordinate = getCoordinateFrom(preload: progress)
         updatePreloadFrames(with: coordinate)
     }
@@ -134,7 +166,7 @@ private extension TimelineView {
         addSubview(futureProgress)
         self.futureProgress = futureProgress
 
-        let preloadProgress = createLine(with: config.inactiveColor, and: config.lineHeight)
+        let preloadProgress = createLine(with: bufferedColor, and: config.lineHeight)
         addSubview(preloadProgress)
         self.preloadProgress = preloadProgress
 
@@ -147,14 +179,29 @@ private extension TimelineView {
         self.activeCircleView = activeCircleView
         self.activeCircleView.isHidden = true
 
-        let circleView = createCircle(with: config.activeColor, radius: config.circleRadius)
+        let circleView = createCircle(with: thumbColor, radius: config.circleRadius)
+        circleView.isHidden = !showsIdleThumb
         addSubview(circleView)
         self.circleView = circleView
+    }
+
+    /// The theme's color when a theme is set, else the configuration's, as before themes.
+    var bufferedColor: UIColor {
+        theme.colors.timelineBuffered == KinescopePlayerTheme.Colors.default.timelineBuffered
+            ? config.inactiveColor
+            : theme.colors.timelineBuffered
+    }
+
+    var thumbColor: UIColor {
+        theme.colors.timelineThumb == KinescopePlayerTheme.Colors.default.timelineThumb
+            ? config.activeColor
+            : theme.colors.timelineThumb
     }
 
     func createLine(with color: UIColor, and height: CGFloat) -> UIView {
         let view = UIView(frame: .init(origin: .zero, size: .init(width: .zero, height: height)))
         view.backgroundColor = color
+        view.layer.cornerRadius = min(theme.metrics.timelineCornerRadius, height / 2)
         view.isUserInteractionEnabled = false
         return view
     }
@@ -176,14 +223,14 @@ private extension TimelineView {
         circleView.center = .init(x: normalizedX, y: centerY)
         activeCircleView.center = .init(x: normalizedX, y: centerY)
 
-        let progressOrigin = CGPoint(x: config.circleRadius, y: centerY - config.lineHeight / 2)
+        let progressOrigin = CGPoint(x: trackInset, y: centerY - config.lineHeight / 2)
 
         futureProgress.frame = .init(origin: progressOrigin,
-                                     size: .init(width: frame.width - config.circleRadius * 2,
+                                     size: .init(width: max(frame.width - trackInset * 2, .zero),
                                                  height: config.lineHeight))
 
         pastProgress.frame = .init(origin: progressOrigin,
-                                     size: .init(width: normalizedX,
+                                     size: .init(width: max(normalizedX - trackInset, .zero),
                                                  height: config.lineHeight))
     }
 
@@ -193,35 +240,42 @@ private extension TimelineView {
 
         let centerY = frame.height / 2
 
-        let progressOrigin = CGPoint(x: config.circleRadius, y: centerY - config.lineHeight / 2)
+        let progressOrigin = CGPoint(x: trackInset, y: centerY - config.lineHeight / 2)
 
         preloadProgress.frame = .init(origin: progressOrigin,
-                                      size: .init(width: normalizedX,
+                                      size: .init(width: max(normalizedX - trackInset, .zero),
                                                   height: config.lineHeight))
+    }
+
+    var trackWidth: CGFloat {
+        max(frame.width - trackInset * 2, .zero)
     }
 
     /// Convert circle center coordinate to relative value from `0` to `1`
     func getRelativePosition(from coordinate: CGFloat) -> CGFloat {
-        let normalisedCoordinate = getNormalisedCoordinate(from: coordinate) - config.circleRadius
-        return normalisedCoordinate / futureProgress.frame.width
+        guard trackWidth > 0 else {
+            return .zero
+        }
+        let normalisedCoordinate = getNormalisedCoordinate(from: coordinate) - trackInset
+        return normalisedCoordinate / trackWidth
     }
 
     /// Convert relative value from `0` to `1` to circle center coordinate
     func getCoordinateFrom(current position: CGFloat) -> CGFloat {
-        position * futureProgress.frame.width + config.circleRadius
+        position * trackWidth + trackInset
     }
 
-    /// Convert relative value from `0` to `1` to circle center coordinate
+    /// Convert relative value from `0` to `1` to the end of the buffered part
     func getCoordinateFrom(preload position: CGFloat) -> CGFloat {
-        position * futureProgress.frame.width
+        position * trackWidth + trackInset
     }
 
-    /// Keep circle center x in view bounds
+    /// Keep circle center x on the track
     func getNormalisedCoordinate(from coordinate: CGFloat) -> CGFloat {
-        if coordinate < config.circleRadius {
-            return config.circleRadius
-        } else if coordinate > frame.width - config.circleRadius {
-            return frame.width - config.circleRadius
+        if coordinate < trackInset {
+            return trackInset
+        } else if coordinate > frame.width - trackInset {
+            return frame.width - trackInset
         } else {
             return coordinate
         }

@@ -22,6 +22,7 @@ final class PlayerOverlayView: UIControl {
     private let nameView: VideoNameView
     private let contentView = UIView()
     private let config: KinescopePlayerOverlayConfiguration
+    private let theme: KinescopePlayerTheme
     private weak var delegate: PlayerOverlayViewDelegate?
     private var isPlaying = false
     private var isRewind = false
@@ -31,8 +32,11 @@ final class PlayerOverlayView: UIControl {
 
     // MARK: - Lifecycle
 
-    init(config: KinescopePlayerOverlayConfiguration, delegate: PlayerOverlayViewDelegate? = nil) {
+    init(config: KinescopePlayerOverlayConfiguration,
+         theme: KinescopePlayerTheme = .default,
+         delegate: PlayerOverlayViewDelegate? = nil) {
         self.config = config
+        self.theme = theme
         self.delegate = delegate
         self.nameView = VideoNameView(config: config.nameConfiguration)
         super.init(frame: .zero)
@@ -56,6 +60,45 @@ final class PlayerOverlayView: UIControl {
             }
         }
     }
+
+    // The play button's pressed state; taps themselves stay with the gesture recognizers.
+
+    override func beginTracking(_ touch: UITouch, with event: UIEvent?) -> Bool {
+        setPlayButtonPressed(isSelected && playButtonFrame.contains(touch.location(in: contentView)))
+        return super.beginTracking(touch, with: event)
+    }
+
+    override func continueTracking(_ touch: UITouch, with event: UIEvent?) -> Bool {
+        if isPlayButtonPressed && !playButtonFrame.contains(touch.location(in: contentView)) {
+            setPlayButtonPressed(false)
+        }
+        return super.continueTracking(touch, with: event)
+    }
+
+    override func endTracking(_ touch: UITouch?, with event: UIEvent?) {
+        setPlayButtonPressed(false)
+        super.endTracking(touch, with: event)
+    }
+
+    override func cancelTracking(with event: UIEvent?) {
+        setPlayButtonPressed(false)
+        super.cancelTracking(with: event)
+    }
+
+    private(set) var isPlayButtonPressed = false
+
+    func setPlayButtonPressed(_ pressed: Bool) {
+        guard let pressedColor = theme.colors.playButtonBackgroundPressed else {
+            return
+        }
+        isPlayButtonPressed = pressed
+        playBackgroundCircle.backgroundColor = pressed ? pressedColor : config.playBackgroundColor
+    }
+
+    /// The circle and the glyph: a tap anywhere on them toggles playback.
+    private var playButtonFrame: CGRect {
+        playBackgroundCircle.frame.union(playPauseImageView.frame)
+    }
 }
 
 // MARK: - PlayerOverlayInput
@@ -67,7 +110,7 @@ extension PlayerOverlayView: PlayerOverlayInput {
 
     func set(playing: Bool) {
         self.isPlaying = playing
-        playPauseImageView.image = playing ? config.pauseImage : config.playImage
+        updatePlayPauseImage()
     }
 }
 
@@ -76,6 +119,8 @@ extension PlayerOverlayView: PlayerOverlayInput {
 private extension PlayerOverlayView {
     func setupInitialState() {
         isSelected = false
+        // Template glyphs from a theme; the bundled images are not templates and ignore it.
+        tintColor = theme.colors.icon
 
         addGestureRecognizers()
         configureContentView()
@@ -96,23 +141,48 @@ private extension PlayerOverlayView {
     func configurePlayPauseImageView() {
         playBackgroundCircle.layer.cornerRadius = config.playBackgroundRadius
         playBackgroundCircle.backgroundColor = config.playBackgroundColor
-        playPauseImageView.image = isPlaying ? config.pauseImage : config.playImage
+        playPauseImageView.contentMode = .center
+        if let tint = theme.colors.playButtonIcon {
+            playPauseImageView.tintColor = tint
+        }
+        updatePlayPauseImage()
 
         contentView.addSubviews(playBackgroundCircle, playPauseImageView)
         playBackgroundCircle.squareSize(with: config.playBackgroundRadius * 2)
         contentView.centerChild(view: playBackgroundCircle)
-        contentView.centerChild(view: playPauseImageView)
+        let offset = theme.metrics.playButtonGlyphOffset
+        playPauseImageView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            playPauseImageView.centerXAnchor.constraint(equalTo: playBackgroundCircle.centerXAnchor,
+                                                        constant: offset.horizontal),
+            playPauseImageView.centerYAnchor.constraint(equalTo: playBackgroundCircle.centerYAnchor,
+                                                        constant: offset.vertical)
+        ])
+    }
+
+    func updatePlayPauseImage() {
+        playPauseImageView.image = isPlaying
+            ? themedGlyph(config.pauseImage, icon: .pause, scale: theme.metrics.playButtonGlyphScale)
+            : themedGlyph(config.playImage, icon: .play, scale: theme.metrics.playButtonGlyphScale)
+    }
+
+    /// When the theme supplies the glyph, it is drawn at the theme's scale; otherwise the image stays as is.
+    func themedGlyph(_ image: UIImage, icon: KinescopePlayerIcon, scale: CGFloat? = nil) -> UIImage {
+        guard theme.icons.custom(icon) != nil else {
+            return image
+        }
+        return image.scaled(by: scale ?? theme.metrics.iconGlyphScale)
     }
 
     func configureFastForwardImageView() {
-        fastForwardImageView.image = config.fastForwardImage
+        fastForwardImageView.image = themedGlyph(config.fastForwardImage, icon: .fastForward)
         fastForwardImageView.alpha = .zero
         addSubview(fastForwardImageView)
         rightCenterChild(view: fastForwardImageView)
     }
 
     func configureFastBackwardImageView() {
-        fastBackwardImageView.image = config.fastBackwardImage
+        fastBackwardImageView.image = themedGlyph(config.fastBackwardImage, icon: .fastBackward)
         fastBackwardImageView.alpha = .zero
         addSubview(fastBackwardImageView)
         leftCenterChild(view: fastBackwardImageView)
@@ -146,11 +216,10 @@ private extension PlayerOverlayView {
     func playPauseAction() {
         isPlaying.toggle()
 
+        updatePlayPauseImage()
         if isPlaying {
-            playPauseImageView.image = config.pauseImage
             delegate?.didPlay()
         } else {
-            playPauseImageView.image = config.playImage
             delegate?.didPause()
         }
     }
@@ -159,7 +228,7 @@ private extension PlayerOverlayView {
     func singleTapAction(recognizer: UITapGestureRecognizer) {
         let location = recognizer.location(in: contentView)
 
-        if isSelected && playPauseImageView.frame.contains(location) {
+        if isSelected && playButtonFrame.contains(location) {
             playPauseAction()
         } else {
             isRewind = false

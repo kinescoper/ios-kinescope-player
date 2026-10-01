@@ -20,10 +20,12 @@ class TimeIndicatorView: UIView {
     private let label = UILabel()
 
     private let config: KinescopePlayerTimeindicatorConfiguration
+    private let theme: KinescopePlayerTheme
     private let formatter = DateFormatter()
 
-    init(config: KinescopePlayerTimeindicatorConfiguration) {
+    init(config: KinescopePlayerTimeindicatorConfiguration, theme: KinescopePlayerTheme = .default) {
         self.config = config
+        self.theme = theme
         super.init(frame: .zero)
         setupInitialState(with: config)
     }
@@ -35,9 +37,10 @@ class TimeIndicatorView: UIView {
     override var intrinsicContentSize: CGSize {
         let label = UILabel()
         label.font = monospacedFont()
-        label.text = getText(from: 3600 * 24)
+        // Digits are monospaced, so the widest text of a format is any text of it.
+        label.text = theme.metrics.timeReservesHours ? getText(from: 3600 * 24) : (self.label.text ?? getText(from: 0))
         label.sizeToFit()
-        return .init(width: label.frame.size.width, height: label.font.lineHeight)
+        return .init(width: ceil(label.frame.size.width), height: label.font.lineHeight)
     }
 
 }
@@ -47,7 +50,12 @@ class TimeIndicatorView: UIView {
 extension TimeIndicatorView: TimeIndicatorInput {
 
     func setIndicator(to time: TimeInterval) {
-        label.text = getText(from: time)
+        let text = getText(from: time)
+        let resizes = !theme.metrics.timeReservesHours && text.count != label.text?.count
+        label.text = text
+        if resizes {
+            invalidateIntrinsicContentSize()
+        }
     }
 
 }
@@ -86,7 +94,7 @@ private extension TimeIndicatorView {
                 UIFontDescriptor.FeatureKey.typeIdentifier: kMonospacedNumbersSelector
             ]
         ]
-        let descriptorWithFeatures = UIFont.systemFont(ofSize: config.fontSize)
+        let descriptorWithFeatures = theme.fonts.time.withSize(config.fontSize)
             .fontDescriptor
             .addingAttributes([UIFontDescriptor.AttributeName.featureSettings: fontFeatures])
         return UIFont(descriptor: descriptorWithFeatures, size: config.fontSize)
