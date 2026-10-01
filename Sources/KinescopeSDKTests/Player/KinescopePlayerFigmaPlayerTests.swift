@@ -9,8 +9,8 @@ final class KinescopePlayerFigmaPlayerTests: XCTestCase {
         static let size = CGSize(width: 375, height: 211)
         static let options: [KinescopePlayerOption] = [.subtitles, .airPlay, .settings, .pip, .fullscreen, .more]
         static let black32 = UIColor(red: 0x11 / 255, green: 0x11 / 255, blue: 0x11 / 255, alpha: 0.32)
-        static let white16 = UIColor(white: 1, alpha: 0.16)
         static let pressed = UIColor(white: 1, alpha: 0.64)
+        static let white8 = UIColor(white: 1, alpha: 0.08)
     }
 
     private var window: UIWindow?
@@ -27,7 +27,7 @@ final class KinescopePlayerFigmaPlayerTests: XCTestCase {
         let theme = KinescopePlayerTheme.default
 
         XCTAssertNil(theme.colors.controlBarBackground)
-        XCTAssertNil(theme.colors.moreBackground)
+        XCTAssertNil(theme.colors.optionPressedBackground)
         XCTAssertNotNil(theme.colors.timelineThumbHalo)
         XCTAssertNil(theme.chromePlayButton)
         XCTAssertEqual(theme.menu.presentation, .sideSheet)
@@ -67,15 +67,24 @@ final class KinescopePlayerFigmaPlayerTests: XCTestCase {
         XCTAssertEqual(panel.convert(panel.optionsMenu.frame, to: view).midY, 159 + 22, accuracy: 0.5)
     }
 
-    func testMoreOptionSitsOnACircle() throws {
+    func testPressedOptionShowsACircle() throws {
         let view = makePlayerView(theme: makeTheme())
         let buttons = view.allSubviews { $0 is OptionButton }.compactMap { $0 as? OptionButton }
         let more = try XCTUnwrap(buttons.first { $0.option == .more })
-        let fullscreen = try XCTUnwrap(buttons.first { $0.option == .fullscreen })
+        let circle = try XCTUnwrap(more.pressedCircle)
+        view.layoutIfNeeded()
 
-        XCTAssertEqual(more.backgroundColor, Constants.white16)
-        XCTAssertEqual(more.layer.cornerRadius, 14)
-        XCTAssertNil(fullscreen.backgroundColor)
+        // Figma «Settings 3» State=Hovered 20485:48137: a 32-point circle behind the glyph.
+        XCTAssertTrue(circle.isHidden)
+        XCTAssertEqual(circle.bounds.size, CGSize(width: 32, height: 32))
+        XCTAssertEqual(circle.center, CGPoint(x: more.bounds.midX, y: more.bounds.midY))
+        XCTAssertEqual(circle.backgroundColor, Constants.white8)
+        XCTAssertFalse(more.adjustsImageWhenHighlighted)
+
+        more.isHighlighted = true
+        XCTAssertFalse(circle.isHidden)
+        more.isHighlighted = false
+        XCTAssertTrue(circle.isHidden)
     }
 
     func testDraggedThumbHasNoHaloWithoutAColor() throws {
@@ -120,7 +129,9 @@ final class KinescopePlayerFigmaPlayerTests: XCTestCase {
     }
 
     func testGlyphOnlyButtonTintsTheGlyphWhenPressed() throws {
-        let view = makePlayerView(theme: makeTheme())
+        var theme = makeTheme()
+        theme.colors.optionPressedBackground = nil
+        let view = makePlayerView(theme: theme)
         let overlay = try XCTUnwrap(view.overlay)
         let glyph = try XCTUnwrap(overlay.playPauseGlyphView)
 
@@ -129,6 +140,17 @@ final class KinescopePlayerFigmaPlayerTests: XCTestCase {
 
         overlay.setPlayButtonPressed(false)
         XCTAssertEqual(glyph.tintColor, .white)
+    }
+
+    func testGlyphOnlyButtonShowsThePressedCircle() throws {
+        let view = makePlayerView(theme: makeTheme())
+        let overlay = try XCTUnwrap(view.overlay)
+        overlay.setPlayButtonPressed(true)
+
+        let circles = overlay.allSubviews {
+            $0.layer.cornerRadius == 28 && $0.alpha == 1 && ($0.backgroundColor?.cgColor.alpha ?? 0) > 0
+        }
+        XCTAssertEqual(circles.map(\.backgroundColor), [Constants.white8])
     }
 
     func testMorphingGlyphIsScaledForTheChrome() throws {
@@ -253,7 +275,7 @@ final class KinescopePlayerFigmaPlayerTests: XCTestCase {
     private func makeTheme(startScreen: KinescopePlayerTheme.StartScreen = .sdk) -> KinescopePlayerTheme {
         var colors = KinescopePlayerTheme.Colors.default
         colors.controlBarBackground = Constants.black32
-        colors.moreBackground = Constants.white16
+        colors.optionPressedBackground = Constants.white8
         colors.timelineThumbHalo = nil
         colors.iconPressed = Constants.pressed
         let glyphs: [KinescopePlayerIcon: String] = [

@@ -115,7 +115,7 @@ final class PlayerOverlayView: UIControl {
         let style = playButtonStyle
         let isGlyphOnly = style.isGlyphOnly
         guard isGlyphOnly
-            ? colors.iconPressed != nil
+            ? colors.iconPressed != nil || colors.optionPressedBackground != nil
             : colors.playButtonBackgroundPressed != nil || colors.playButtonPressedOverlay != nil else {
             return
         }
@@ -124,8 +124,9 @@ final class PlayerOverlayView: UIControl {
         let pressedBackground = colors.playButtonBackgroundPressed ?? style.background
         let changes = {
             if isGlyphOnly {
-                // A glyph without a fill changes its colour.
+                // A glyph without a fill gets the options' pressed circle, or changes its colour.
                 self.setPlayGlyphTint(pressed ? colors.iconPressed : nil)
+                self.playPressedCircle.alpha = pressed && colors.optionPressedBackground != nil ? 1 : 0
             } else {
                 self.playBackgroundCircle.backgroundColor = pressed ? pressedBackground : style.background
                 self.playPressedCircle.alpha = pressed && colors.playButtonPressedOverlay != nil ? 1 : 0
@@ -317,6 +318,9 @@ private extension PlayerOverlayView {
             circle.layer.cornerRadius = style.diameter / 2
         }
         playBackgroundCircle.backgroundColor = style.background
+        playPressedCircle.backgroundColor = style.isGlyphOnly
+            ? theme.colors.optionPressedBackground
+            : theme.colors.playButtonPressedOverlay
         playPressedCircle.alpha = 0
         isPlayButtonPressed = false
         setPlayGlyphTint(nil)

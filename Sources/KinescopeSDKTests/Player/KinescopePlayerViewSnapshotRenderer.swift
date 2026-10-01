@@ -165,6 +165,12 @@ final class KinescopePlayerViewSnapshotRenderer: XCTestCase {
         try save(view, to: directory.appendingPathComponent("player-4-dragging.png"))
         view.controlPanel?.timeline.isTouching = false
 
+        // The three dots held down: the pressed circle.
+        let more = Self.optionButtons(in: view).first { $0.option == .more }
+        more?.isHighlighted = true
+        try save(view, to: directory.appendingPathComponent("player-4b-pressed.png"))
+        more?.isHighlighted = false
+
         // The three dots: every option in the pill.
         view.controlPanel?.expanded = true
         try save(view, to: directory.appendingPathComponent("player-5-expanded.png"))
@@ -251,7 +257,8 @@ final class KinescopePlayerViewSnapshotRenderer: XCTestCase {
         theme.chromePlayButton = .glyphOnly
         theme.menu = .card
         theme.seekFeedback = .sideArea
-        theme.colors.moreBackground = UIColor.white.withAlphaComponent(0.16)
+        theme.colors.optionPressedBackground = UIColor.white.withAlphaComponent(0.08)
+        theme.colors.iconPressed = nil
         return theme
     }
 
@@ -285,8 +292,8 @@ final class KinescopePlayerViewSnapshotRenderer: XCTestCase {
             .exitFullscreen: ("exit-fullscreen-player", "arrow.down.right.and.arrow.up.left"),
             .settings: ("settings-player", "gearshape"),
             .airPlay: ("airplay", "airplayvideo"),
-            .subtitles: ("transcription-off", "captions.bubble"),
-            .subtitlesOn: ("transcription-on", "captions.bubble.fill"),
+            .subtitles: ("cc-off", "captions.bubble"),
+            .subtitlesOn: ("cc-on", "captions.bubble.fill"),
             .pip: ("mini-player", "pip"),
             .download: ("download", "arrow.down.to.line"),
             .menuBack: ("arrow-back", "chevron.left"),

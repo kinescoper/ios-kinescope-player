@@ -487,8 +487,9 @@ public extension KinescopePlayerTheme {
         public var controlBarBackground: UIColor?
         /// Halo around the timeline thumb while it is dragged. `nil`: no halo.
         public var timelineThumbHalo: UIColor?
-        /// Circle under the three dots option, as big as the option. `nil`: no circle.
-        public var moreBackground: UIColor?
+        /// Circle behind a pressed option and behind a pressed glyph-only play button (Figma «Player» `Settings 3`
+        /// State=Hovered `20485:48137`: `Surface/inverse/neutral/tertiary` behind the glyph). `nil`: no circle.
+        public var optionPressedBackground: UIColor?
 
         public init(icon: UIColor,
                     iconPressed: UIColor?,
@@ -505,7 +506,7 @@ public extension KinescopePlayerTheme {
                     playButtonPressedOverlay: UIColor? = nil,
                     controlBarBackground: UIColor? = nil,
                     timelineThumbHalo: UIColor? = UIColor(red: 1, green: 1, blue: 1, alpha: 0.16),
-                    moreBackground: UIColor? = nil) {
+                    optionPressedBackground: UIColor? = nil) {
             self.icon = icon
             self.iconPressed = iconPressed
             self.text = text
@@ -521,7 +522,7 @@ public extension KinescopePlayerTheme {
             self.title = title
             self.controlBarBackground = controlBarBackground
             self.timelineThumbHalo = timelineThumbHalo
-            self.moreBackground = moreBackground
+            self.optionPressedBackground = optionPressedBackground
         }
 
         public static let `default` = Colors(
@@ -626,6 +627,8 @@ public extension KinescopePlayerTheme {
         public var controlBarPadding: UIEdgeInsets
         /// Rounding of the control bar background, at most half its height.
         public var controlBarCornerRadius: CGFloat
+        /// Diameter of ``Colors/optionPressedBackground`` behind an option.
+        public var optionPressedDiameter: CGFloat
 
         public init(controlBarInsets: UIEdgeInsets,
                     controlBarHeight: CGFloat,
@@ -643,7 +646,8 @@ public extension KinescopePlayerTheme {
                     timelineThumbVisibleWhenIdle: Bool,
                     timeReservesHours: Bool,
                     controlBarPadding: UIEdgeInsets = .zero,
-                    controlBarCornerRadius: CGFloat = 0) {
+                    controlBarCornerRadius: CGFloat = 0,
+                    optionPressedDiameter: CGFloat = 32) {
             self.controlBarInsets = controlBarInsets
             self.controlBarHeight = controlBarHeight
             self.controlBarSpacing = controlBarSpacing
@@ -661,6 +665,7 @@ public extension KinescopePlayerTheme {
             self.timeReservesHours = timeReservesHours
             self.controlBarPadding = controlBarPadding
             self.controlBarCornerRadius = controlBarCornerRadius
+            self.optionPressedDiameter = optionPressedDiameter
         }
 
         /// The SDK's own geometry.
