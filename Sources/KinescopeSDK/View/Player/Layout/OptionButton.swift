@@ -37,6 +37,11 @@ final class OptionButton: UIButton {
         }
     }
 
+    /// A 28-point option still takes taps 44 points wide and high.
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        minimumHitArea.contains(point)
+    }
+
 }
 
 // MARK: - Private
@@ -66,6 +71,7 @@ private extension OptionButton {
             adjustsImageWhenHighlighted = false
         }
         imageView?.contentMode = .center
+        accessibilityLabel = theme.accessibilityLabels.label(for: option, isFullscreen: isFullscreen)
         updateTint()
     }
 

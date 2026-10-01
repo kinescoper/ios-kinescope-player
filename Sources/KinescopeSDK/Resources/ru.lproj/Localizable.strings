@@ -41,3 +41,13 @@
 "Player.refresh" = "Обновить";
 "Player.error" = "Ошибка воспроизведения";
 "Player.soon" = "Скоро начнется";
+
+// MARK: - Accessibility
+
+"Player.moreOptions" = "Другие параметры";
+"Player.pictureInPicture" = "Картинка в картинке";
+"Player.timeline" = "Позиция воспроизведения";
+"Player.fastForward" = "Перемотать вперёд";
+"Player.fastBackward" = "Перемотать назад";
+"Player.back" = "Назад";
+"Player.close" = "Закрыть";

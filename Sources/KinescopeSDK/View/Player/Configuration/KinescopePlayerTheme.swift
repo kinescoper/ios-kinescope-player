@@ -60,17 +60,28 @@ public struct KinescopePlayerTheme {
     public var fonts: Fonts
     public var metrics: Metrics
     public var startScreen: StartScreen
+    public var accessibilityLabels: AccessibilityLabels
+    /// Makes the loading indicator of each player view. `nil` keeps
+    /// ``KinescopePlayerViewConfiguration``'s `activityIndicator`.
+    public var loader: (() -> KinescopeActivityIndicator)?
+    public var playPauseAnimation: PlayPauseAnimation
 
     public init(icons: Icons = .default,
                 colors: Colors = .default,
                 fonts: Fonts = .default,
                 metrics: Metrics = .default,
-                startScreen: StartScreen = .sdk) {
+                startScreen: StartScreen = .sdk,
+                accessibilityLabels: AccessibilityLabels = .default,
+                loader: (() -> KinescopeActivityIndicator)? = nil,
+                playPauseAnimation: PlayPauseAnimation = .none) {
         self.icons = icons
         self.colors = colors
         self.fonts = fonts
         self.metrics = metrics
         self.startScreen = startScreen
+        self.accessibilityLabels = accessibilityLabels
+        self.loader = loader
+        self.playPauseAnimation = playPauseAnimation
     }
 
     /// The SDK's own look.
@@ -87,8 +98,152 @@ public extension KinescopePlayerTheme {
         /// The SDK's own behavior: the poster goes away once the item is ready, the chrome shows on a tap.
         case sdk
         /// The poster and the play button only, no dimming, title or control bar; a tap outside the button does
-        /// nothing. The usual chrome takes over once playback starts.
+        /// nothing. The button is there while the video loads, without a loading indicator; the indicator shows
+        /// only after a tap, until playback starts. The usual chrome takes over once playback starts.
         case posterAndPlayButton
+    }
+
+}
+
+// MARK: - Accessibility
+
+public extension KinescopePlayerTheme {
+
+    /// VoiceOver labels of the chrome controls. ``default`` takes the SDK's own strings (English, Russian), or
+    /// the app's `KinescopeLocalizable.strings` where it overrides a key.
+    struct AccessibilityLabels {
+        /// The play/pause button while paused.
+        public var play: String
+        /// The play/pause button while playing.
+        public var pause: String
+        /// Custom action of the play/pause button: the same as a double tap on the right part of the video.
+        public var fastForward: String
+        /// Custom action of the play/pause button: the same as a double tap on the left part of the video.
+        public var fastBackward: String
+        /// The timeline, an adjustable element: swipe up or down to seek.
+        public var timeline: String
+        /// Options menu: three dots that show every option.
+        public var more: String
+        public var fullscreen: String
+        public var exitFullscreen: String
+        /// Options menu: settings with the playback speed, subtitles and quality.
+        public var settings: String
+        public var attachments: String
+        public var download: String
+        public var airPlay: String
+        public var subtitles: String
+        public var pip: String
+        /// Side menu: back to the previous level.
+        public var menuBack: String
+        /// Side menu: close.
+        public var menuClose: String
+
+        public init(play: String,
+                    pause: String,
+                    fastForward: String,
+                    fastBackward: String,
+                    timeline: String,
+                    more: String,
+                    fullscreen: String,
+                    exitFullscreen: String,
+                    settings: String,
+                    attachments: String,
+                    download: String,
+                    airPlay: String,
+                    subtitles: String,
+                    pip: String,
+                    menuBack: String,
+                    menuClose: String) {
+            self.play = play
+            self.pause = pause
+            self.fastForward = fastForward
+            self.fastBackward = fastBackward
+            self.timeline = timeline
+            self.more = more
+            self.fullscreen = fullscreen
+            self.exitFullscreen = exitFullscreen
+            self.settings = settings
+            self.attachments = attachments
+            self.download = download
+            self.airPlay = airPlay
+            self.subtitles = subtitles
+            self.pip = pip
+            self.menuBack = menuBack
+            self.menuClose = menuClose
+        }
+
+        public static var `default`: AccessibilityLabels {
+            AccessibilityLabels(
+                play: L10n.Player.play,
+                pause: L10n.Player.pause,
+                fastForward: L10n.Player.fastForward,
+                fastBackward: L10n.Player.fastBackward,
+                timeline: L10n.Player.timeline,
+                more: L10n.Player.moreOptions,
+                fullscreen: L10n.Player.fullscreen,
+                exitFullscreen: L10n.Player.exitFullscreen,
+                settings: L10n.Player.settings,
+                attachments: L10n.Player.attachments,
+                download: L10n.Player.download,
+                airPlay: L10n.Player.airplay,
+                subtitles: L10n.Player.subtitles,
+                pip: L10n.Player.pictureInPicture,
+                menuBack: L10n.Player.back,
+                menuClose: L10n.Player.close
+            )
+        }
+
+        /// The label of an option button; `nil` for a custom option, which has none.
+        func label(for option: KinescopePlayerOption, isFullscreen: Bool) -> String? {
+            switch option {
+            case .more:
+                return more
+            case .fullscreen:
+                return isFullscreen ? exitFullscreen : fullscreen
+            case .settings:
+                return settings
+            case .attachments:
+                return attachments
+            case .download:
+                return download
+            case .airPlay:
+                return airPlay
+            case .subtitles:
+                return subtitles
+            case .pip:
+                return pip
+            case .custom:
+                return nil
+            }
+        }
+    }
+
+}
+
+// MARK: - Play/pause animation
+
+public extension KinescopePlayerTheme {
+
+    /// How the play/pause button changes its glyph and answers a tap.
+    struct PlayPauseAnimation {
+        /// `true` draws the glyph as a shape that morphs between the play triangle and the pause bars, sized
+        /// like the play and pause images; `false` swaps the images.
+        public var morphsGlyph: Bool
+        /// Length of the morph and of the pressed state fading out after a tap. `0`: no animation.
+        public var duration: TimeInterval
+        /// Rounding of the morphing shape's corners.
+        public var glyphCornerRadius: CGFloat
+
+        public init(morphsGlyph: Bool, duration: TimeInterval, glyphCornerRadius: CGFloat = 1) {
+            self.morphsGlyph = morphsGlyph
+            self.duration = duration
+            self.glyphCornerRadius = glyphCornerRadius
+        }
+
+        /// The SDK's own behavior: the images swap, the pressed state goes at once.
+        public static let none = PlayPauseAnimation(morphsGlyph: false, duration: 0)
+        /// Like Android's media3 player: a 200 ms morph, the pressed state fading out as long.
+        public static let morph = PlayPauseAnimation(morphsGlyph: true, duration: 0.2)
     }
 
 }

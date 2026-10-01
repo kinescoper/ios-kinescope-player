@@ -41,6 +41,17 @@ class PlayerControlView: UIControl {
         fatalError("init(coder:) has not been implemented")
     }
 
+    /// The bar is lower than a 44-point target: touches just outside it reach the options and the timeline when
+    /// their grown areas take them; anything else there stays with the views behind.
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        bounds.contains(point) || [optionsMenu, timeline].contains { control in
+            guard let control, !control.isHidden, control.alpha > 0.01 else {
+                return false
+            }
+            return control.point(inside: convert(point, to: control), with: event)
+        }
+    }
+
     override var intrinsicContentSize: CGSize {
         let insets = theme.metrics.controlBarInsets
         return .init(width: .greatestFiniteMagnitude, height: config.preferedHeight + insets.top + insets.bottom)

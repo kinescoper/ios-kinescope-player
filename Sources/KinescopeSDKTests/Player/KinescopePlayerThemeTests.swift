@@ -141,13 +141,13 @@ final class KinescopePlayerThemeTests: XCTestCase {
         let background = try XCTUnwrap(circles.first)
         let layer = try XCTUnwrap(circles.last)
         XCTAssertEqual(layer.backgroundColor, Constants.pressedOverlay)
-        XCTAssertTrue(layer.isHidden)
+        XCTAssertEqual(layer.alpha, 0)
 
         overlay.setPlayButtonPressed(true)
-        XCTAssertFalse(layer.isHidden)
+        XCTAssertEqual(layer.alpha, 1)
         XCTAssertEqual(background.backgroundColor, theme.colors.playButtonBackground, "the fill stays under the layer")
         overlay.setPlayButtonPressed(false)
-        XCTAssertTrue(layer.isHidden)
+        XCTAssertEqual(layer.alpha, 0)
     }
 
     // MARK: - Start screen
@@ -168,7 +168,9 @@ final class KinescopePlayerThemeTests: XCTestCase {
         let overlay = try XCTUnwrap(view.overlay)
 
         view.startLoader()
-        XCTAssertTrue(overlay.isHidden, "the spinner alone while the video loads")
+        XCTAssertFalse(overlay.isHidden, "the play button while the video loads")
+        XCTAssertTrue(overlay.isStartScreen)
+        XCTAssertTrue(view.progressView.isHidden, "no indicator under the play button")
         view.stopLoader()
 
         XCTAssertFalse(view.previewView.isHidden)

@@ -72,6 +72,21 @@ class PlayerControlOptionsView: UIControl {
         }
     }
 
+    // Options are smaller than a 44-point target: a touch near one goes to the nearest option whose grown area
+    // takes it, also past this view's frame.
+
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        minimumHitArea.insetBy(dx: -UIView.minimumHitSide / 2, dy: 0).contains(point)
+            && optionHit(at: point, with: event) != nil
+    }
+
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        guard isUserInteractionEnabled, !isHidden, alpha > 0.01, let option = optionHit(at: point, with: event) else {
+            return super.hitTest(point, with: event)
+        }
+        return option.hitTest(convert(point, to: option), with: event) ?? option
+    }
+
 }
 
 // MARK: - Input
@@ -180,6 +195,17 @@ private extension PlayerControlOptionsView {
             $0.removeFromSuperview()
             stackView.removeArrangedSubview($0)
         }
+    }
+
+    func optionHit(at point: CGPoint, with event: UIEvent?) -> UIView? {
+        stackView.arrangedSubviews
+            .filter { !$0.isHidden && $0.isUserInteractionEnabled && $0.point(inside: convert(point, to: $0), with: event) }
+            .min { distance(from: point, to: $0) < distance(from: point, to: $1) }
+    }
+
+    func distance(from point: CGPoint, to view: UIView) -> CGFloat {
+        let center = convert(view.center, from: view.superview)
+        return hypot(point.x - center.x, point.y - center.y)
     }
 
     @objc

@@ -18,6 +18,11 @@ final class PlayerOverlayView: UIControl {
     private let playBackgroundCircle = UIView()
     private let playPressedCircle = UIView()
     private let playPauseImageView = UIImageView()
+    /// The glyph when the theme morphs it (``KinescopePlayerTheme/PlayPauseAnimation/morphsGlyph``).
+    private(set) var playPauseGlyphView: PlayPauseGlyphView?
+    /// VoiceOver's play/pause button: the circle is drawn, not a view, and it answers wherever the overlay is
+    /// shown, also while the chrome is hidden.
+    private(set) lazy var playButtonElement = PlayButtonAccessibilityElement(overlay: self)
     private let fastForwardImageView = UIImageView()
     private let fastBackwardImageView = UIImageView()
     private let nameView: VideoNameView
@@ -98,15 +103,44 @@ final class PlayerOverlayView: UIControl {
 
     private(set) var isPlayButtonPressed = false
 
+    /// The pressed state comes at once and goes over ``KinescopePlayerTheme/PlayPauseAnimation/duration``, so a
+    /// quick tap is seen too.
     func setPlayButtonPressed(_ pressed: Bool) {
         let colors = theme.colors
         guard colors.playButtonBackgroundPressed != nil || colors.playButtonPressedOverlay != nil else {
             return
         }
+        let wasPressed = isPlayButtonPressed
         isPlayButtonPressed = pressed
         let pressedBackground = colors.playButtonBackgroundPressed ?? config.playBackgroundColor
-        playBackgroundCircle.backgroundColor = pressed ? pressedBackground : config.playBackgroundColor
-        playPressedCircle.isHidden = !pressed || colors.playButtonPressedOverlay == nil
+        let changes = {
+            self.playBackgroundCircle.backgroundColor = pressed ? pressedBackground : self.config.playBackgroundColor
+            self.playPressedCircle.alpha = pressed && colors.playButtonPressedOverlay != nil ? 1 : 0
+        }
+        let duration = theme.playPauseAnimation.duration
+        if wasPressed && !pressed && duration > 0 && window != nil {
+            UIView.animate(withDuration: duration, delay: 0, options: [.beginFromCurrentState, .allowUserInteraction],
+                           animations: changes)
+        } else {
+            playPressedCircle.layer.removeAllAnimations()
+            playBackgroundCircle.layer.removeAllAnimations()
+            changes()
+        }
+    }
+
+    /// The pressed state of a tap that has already ended, as VoiceOver's activation: in, then fading out.
+    func flashPlayButtonPressed() {
+        setPlayButtonPressed(true)
+        setPlayButtonPressed(false)
+    }
+
+    override var accessibilityElements: [Any]? {
+        get {
+            [playButtonElement]
+        }
+        set {
+            super.accessibilityElements = newValue
+        }
     }
 
     /// Shows only the play button over a clear background, whatever `isSelected` is, or brings the usual chrome
@@ -119,6 +153,13 @@ final class PlayerOverlayView: UIControl {
         contentView.backgroundColor = shown ? .clear : config.backgroundColor
         nameView.isHidden = shown
         contentView.alpha = isPlayButtonShown ? 1.0 : .zero
+        playButtonElement.update(isPlaying: isPlaying)
+    }
+
+    /// The circle and the glyph in the overlay's space.
+    var playButtonFrameInOverlay: CGRect {
+        contentView.layoutIfNeeded()
+        return convert(playButtonFrame, from: contentView)
     }
 
     /// The circle and the glyph: a tap anywhere on them toggles playback.
@@ -136,7 +177,7 @@ extension PlayerOverlayView: PlayerOverlayInput {
 
     func set(playing: Bool) {
         self.isPlaying = playing
-        updatePlayPauseImage()
+        updatePlayPauseImage(animated: true)
     }
 }
 
@@ -169,14 +210,18 @@ private extension PlayerOverlayView {
         playBackgroundCircle.backgroundColor = config.playBackgroundColor
         playPressedCircle.layer.cornerRadius = config.playBackgroundRadius
         playPressedCircle.backgroundColor = theme.colors.playButtonPressedOverlay
-        playPressedCircle.isHidden = true
+        playPressedCircle.alpha = 0
         playPauseImageView.contentMode = .center
         if let tint = theme.colors.playButtonIcon {
             playPauseImageView.tintColor = tint
         }
-        updatePlayPauseImage()
 
         contentView.addSubviews(playBackgroundCircle, playPressedCircle, playPauseImageView)
+        if theme.playPauseAnimation.morphsGlyph {
+            configurePlayPauseGlyphView()
+        }
+        updatePlayPauseImage(animated: false)
+
         playBackgroundCircle.squareSize(with: config.playBackgroundRadius * 2)
         contentView.centerChild(view: playBackgroundCircle)
         playPressedCircle.squareSize(with: config.playBackgroundRadius * 2)
@@ -191,7 +236,34 @@ private extension PlayerOverlayView {
         ])
     }
 
-    func updatePlayPauseImage() {
+    /// Draws the glyph in place of the images, as big as they are.
+    func configurePlayPauseGlyphView() {
+        let scale = theme.metrics.playButtonGlyphScale
+        let playSize = themedGlyph(config.playImage, icon: .play, scale: scale).size
+        let pauseSize = themedGlyph(config.pauseImage, icon: .pause, scale: scale).size
+        let animation = theme.playPauseAnimation
+        let glyphView = PlayPauseGlyphView(playSize: playSize,
+                                           pauseSize: pauseSize,
+                                           duration: animation.duration,
+                                           cornerRadius: animation.glyphCornerRadius)
+        if let tint = theme.colors.playButtonIcon {
+            glyphView.tintColor = tint
+        }
+        contentView.addSubview(glyphView)
+        glyphView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            glyphView.centerXAnchor.constraint(equalTo: playPauseImageView.centerXAnchor),
+            glyphView.centerYAnchor.constraint(equalTo: playPauseImageView.centerYAnchor)
+        ])
+        playPauseImageView.isHidden = true
+        playPauseGlyphView = glyphView
+    }
+
+    func updatePlayPauseImage(animated: Bool) {
+        playButtonElement.update(isPlaying: isPlaying)
+        if let playPauseGlyphView {
+            playPauseGlyphView.set(playing: isPlaying, animated: animated)
+        }
         playPauseImageView.image = isPlaying
             ? themedGlyph(config.pauseImage, icon: .pause, scale: theme.metrics.playButtonGlyphScale)
             : themedGlyph(config.playImage, icon: .play, scale: theme.metrics.playButtonGlyphScale)
@@ -247,7 +319,7 @@ private extension PlayerOverlayView {
     func playPauseAction() {
         isPlaying.toggle()
 
-        updatePlayPauseImage()
+        updatePlayPauseImage(animated: true)
         if isPlaying {
             delegate?.didPlay()
         } else {
@@ -277,46 +349,123 @@ private extension PlayerOverlayView {
         isRewind = true
 
         let location = recognizer.location(in: self)
-        let rightFrame = CGRect(x: contentView.center.x + 24.0,
-                                y: .zero,
-                                width: contentView.bounds.width - contentView.center.x + 24.0,
-                                height: contentView.bounds.height)
-
-        let leftFrame = CGRect(x: .zero,
-                               y: .zero,
-                               width: contentView.bounds.width - contentView.center.x - 24.0,
-                               height: contentView.bounds.height)
-
-        if rightFrame.contains(location) {
-            delegate?.didFastForward()
-
-            fastForwardImageView.alpha = 1.0
-            UIView.animate(
-                withDuration: 0.6,
-                animations: {
-                    self.fastForwardImageView.transform = .init(scaleX: 2.0, y: 2.0)
-                    self.fastForwardImageView.alpha = .zero
-                },
-                completion: { _ in
-                    self.fastForwardImageView.alpha = .zero
-                    self.fastForwardImageView.transform = .identity
-                }
-            )
-        } else if leftFrame.contains(location) {
-            delegate?.didFastBackward()
-
-            fastBackwardImageView.alpha = 1.0
-            UIView.animate(
-                withDuration: 0.6,
-                animations: {
-                    self.fastBackwardImageView.transform = .init(scaleX: 2.0, y: 2.0)
-                    self.fastBackwardImageView.alpha = .zero
-                },
-                completion: { _ in
-                    self.fastBackwardImageView.alpha = .zero
-                    self.fastBackwardImageView.transform = .identity
-                }
-            )
+        if fastForwardFrame.contains(location) {
+            fastForward()
+        } else if fastBackwardFrame.contains(location) {
+            fastBackward()
         }
     }
+
+    var fastForwardFrame: CGRect {
+        CGRect(x: contentView.center.x + 24.0,
+               y: .zero,
+               width: contentView.bounds.width - contentView.center.x + 24.0,
+               height: contentView.bounds.height)
+    }
+
+    var fastBackwardFrame: CGRect {
+        CGRect(x: .zero,
+               y: .zero,
+               width: contentView.bounds.width - contentView.center.x - 24.0,
+               height: contentView.bounds.height)
+    }
+
+    func fastForward() {
+        delegate?.didFastForward()
+
+        fastForwardImageView.alpha = 1.0
+        UIView.animate(
+            withDuration: 0.6,
+            animations: {
+                self.fastForwardImageView.transform = .init(scaleX: 2.0, y: 2.0)
+                self.fastForwardImageView.alpha = .zero
+            },
+            completion: { _ in
+                self.fastForwardImageView.alpha = .zero
+                self.fastForwardImageView.transform = .identity
+            }
+        )
+    }
+
+    func fastBackward() {
+        delegate?.didFastBackward()
+
+        fastBackwardImageView.alpha = 1.0
+        UIView.animate(
+            withDuration: 0.6,
+            animations: {
+                self.fastBackwardImageView.transform = .init(scaleX: 2.0, y: 2.0)
+                self.fastBackwardImageView.alpha = .zero
+            },
+            completion: { _ in
+                self.fastBackwardImageView.alpha = .zero
+                self.fastBackwardImageView.transform = .identity
+            }
+        )
+    }
+}
+
+// MARK: - Accessibility
+
+/// The play/pause button for VoiceOver: its label follows the state, activating it plays or pauses like a tap, and
+/// the double-tap seeks are its custom actions.
+final class PlayButtonAccessibilityElement: UIAccessibilityElement {
+
+    private weak var overlay: PlayerOverlayView?
+    private let labels: KinescopePlayerTheme.AccessibilityLabels
+
+    init(overlay: PlayerOverlayView) {
+        self.overlay = overlay
+        self.labels = overlay.accessibilityLabels
+        super.init(accessibilityContainer: overlay)
+        accessibilityTraits = .button
+        accessibilityLabel = labels.play
+    }
+
+    func update(isPlaying: Bool) {
+        accessibilityLabel = isPlaying ? labels.pause : labels.play
+        accessibilityCustomActions = overlay?.isStartScreen == true ? nil : [
+            UIAccessibilityCustomAction(name: labels.fastForward) { [weak self] _ in
+                self?.overlay?.accessibilityFastForward() != nil
+            },
+            UIAccessibilityCustomAction(name: labels.fastBackward) { [weak self] _ in
+                self?.overlay?.accessibilityFastBackward() != nil
+            }
+        ]
+    }
+
+    override var accessibilityFrameInContainerSpace: CGRect {
+        get {
+            overlay?.playButtonFrameInOverlay ?? .zero
+        }
+        set {
+            super.accessibilityFrameInContainerSpace = newValue
+        }
+    }
+
+    override func accessibilityActivate() -> Bool {
+        overlay?.accessibilityPlayPause() != nil
+    }
+
+}
+
+extension PlayerOverlayView {
+
+    var accessibilityLabels: KinescopePlayerTheme.AccessibilityLabels {
+        theme.accessibilityLabels
+    }
+
+    func accessibilityPlayPause() {
+        flashPlayButtonPressed()
+        playPauseAction()
+    }
+
+    func accessibilityFastForward() {
+        fastForward()
+    }
+
+    func accessibilityFastBackward() {
+        fastBackward()
+    }
+
 }

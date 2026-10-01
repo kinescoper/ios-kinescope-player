@@ -202,9 +202,13 @@ final class KinescopeVideoPlayerHLSIntegrationTests: XCTestCase {
         ready.assertForOverFulfill = false
         delegate.onReady = { ready.fulfill() }
         player.prepare()
+        XCTAssertTrue(overlay.isStartScreen, "the play button while the video loads")
+        XCTAssertFalse(overlay.isHidden)
+        XCTAssertTrue(inlineView.progressView.isHidden, "no loading indicator under the play button")
         wait(for: [ready], timeout: Constants.timeout)
 
         XCTAssertEqual(player.strategy.player.timeControlStatus, .paused, "prepare() must not start playback")
+        XCTAssertTrue(inlineView.progressView.isHidden)
         XCTAssertTrue(overlay.isStartScreen)
         XCTAssertFalse(overlay.isHidden)
         XCTAssertFalse(overlay.isSelected)

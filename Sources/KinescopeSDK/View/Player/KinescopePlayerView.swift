@@ -73,6 +73,14 @@ public class KinescopePlayerView: UIView {
     // MARK: - Internal Methods
 
     func startLoader() {
+        guard !isAwaitingFirstPlay || isWaitingOnStartScreen else {
+            // The start screen: the play button over the poster while the video loads, no indicator.
+            progressView.showVideoProgress(isLoading: false)
+            previewView.isHidden = false
+            overlay?.setStartScreen(true)
+            overlay?.isHidden = false
+            return
+        }
         overlay?.isHidden = true
         previewView.isHidden = false
         progressView.showVideoProgress(isLoading: true)
@@ -206,7 +214,7 @@ public extension KinescopePlayerView {
             configureError(with: errorOverlay)
         }
 
-        configureProgressView(with: config.activityIndicator)
+        configureProgressView(with: config.theme.loader?() ?? config.activityIndicator)
         configurePip()
     }
 
@@ -457,9 +465,10 @@ private extension KinescopePlayerView {
         shadowOverlay.hideAnimated(with: { shadowOverlay.isHidden = false })
     }
 
+    /// Hides the chrome after a while, unless VoiceOver is running: it could not reach the hidden controls.
     func addDebouncerHandler() {
         overlayDebouncer.handler = { [weak self] in
-            guard let self else {
+            guard let self, !UIAccessibility.isVoiceOverRunning else {
                 return
             }
             self.overlay?.isSelected = false
@@ -490,6 +499,12 @@ extension KinescopePlayerView: PlayerOverlayViewDelegate {
     }
 
     func didPlay() {
+        if isAwaitingFirstPlay {
+            // A tap on the start screen: the indicator until playback starts, also while the video still loads.
+            isWaitingOnStartScreen = true
+            overlay?.isHidden = true
+            progressView.showVideoProgress(isLoading: true)
+        }
         addDebouncerHandler()
         overlayDebouncer.renewInterval()
         delegate?.didPlay()

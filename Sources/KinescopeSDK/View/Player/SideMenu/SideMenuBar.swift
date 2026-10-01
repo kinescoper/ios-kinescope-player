@@ -134,8 +134,9 @@ private extension SideMenuBar {
     }
 
     func configureCloseButton() {
-        let button = UIButton()
+        let button = HitAreaButton()
         button.setImage(theme.icons.image(for: .menuClose), for: .normal)
+        button.accessibilityLabel = theme.accessibilityLabels.menuClose
         button.tintColor = theme.colors.icon
 
         addSubview(button)
@@ -147,8 +148,9 @@ private extension SideMenuBar {
     }
 
     func configureBackButton() {
-        let button = UIButton()
+        let button = HitAreaButton()
         button.setImage(theme.icons.image(for: .menuBack), for: .normal)
+        button.accessibilityLabel = theme.accessibilityLabels.menuBack
         button.tintColor = theme.colors.icon
 
         addSubview(button)
@@ -172,6 +174,15 @@ private extension SideMenuBar {
         button.addTarget(nil, action: #selector(onDownloadAllTapped), for: .touchUpInside)
 
         self.downloadAllButton = button
+    }
+
+}
+
+/// A side menu icon button that takes taps at least 44 points wide and high.
+private final class HitAreaButton: UIButton {
+
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        minimumHitArea.contains(point)
     }
 
 }

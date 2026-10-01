@@ -88,6 +88,20 @@ internal enum L10n {
         internal static let reset = L10n.tr("Localizable", "Player.reset")
         /// Options
         internal static let options = L10n.tr("Localizable", "Player.options")
+        /// More options
+        internal static let moreOptions = L10n.tr("Localizable", "Player.moreOptions")
+        /// Picture in Picture
+        internal static let pictureInPicture = L10n.tr("Localizable", "Player.pictureInPicture")
+        /// Playback position
+        internal static let timeline = L10n.tr("Localizable", "Player.timeline")
+        /// Skip forward
+        internal static let fastForward = L10n.tr("Localizable", "Player.fastForward")
+        /// Skip back
+        internal static let fastBackward = L10n.tr("Localizable", "Player.fastBackward")
+        /// Back
+        internal static let back = L10n.tr("Localizable", "Player.back")
+        /// Close
+        internal static let close = L10n.tr("Localizable", "Player.close")
     }
 
 }

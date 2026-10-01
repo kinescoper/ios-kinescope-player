@@ -92,8 +92,41 @@ class TimelineView: UIControl {
 
     /// A thin bar still takes taps at least 44 points tall.
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
-        let extra = max(0, (44 - bounds.height) / 2)
+        let extra = max(0, (UIView.minimumHitSide - bounds.height) / 2)
         return bounds.insetBy(dx: 0, dy: -extra).contains(point)
+    }
+
+}
+
+// MARK: - Accessibility
+
+extension TimelineView {
+
+    /// One VoiceOver swipe moves playback by this share of the video.
+    static let accessibilityStep: CGFloat = 0.05
+
+    override var accessibilityValue: String? {
+        get {
+            NumberFormatter.localizedString(from: NSNumber(value: Double(position)), number: .percent)
+        }
+        set {
+            super.accessibilityValue = newValue
+        }
+    }
+
+    override func accessibilityIncrement() {
+        seekByAccessibility(to: position + Self.accessibilityStep)
+    }
+
+    override func accessibilityDecrement() {
+        seekByAccessibility(to: position - Self.accessibilityStep)
+    }
+
+    private func seekByAccessibility(to position: CGFloat) {
+        let position = min(max(position, 0), 1)
+        setTimeline(to: position)
+        output?.onTimelinePositionChanged(to: position)
+        output?.onUpdate()
     }
 
 }
@@ -161,6 +194,9 @@ private extension TimelineView {
     func setupInitialState(with config: KinescopePlayerTimelineConfiguration) {
 
         backgroundColor = .clear
+        isAccessibilityElement = true
+        accessibilityTraits = .adjustable
+        accessibilityLabel = theme.accessibilityLabels.timeline
 
         let futureProgress = createLine(with: config.inactiveColor, and: config.lineHeight)
         addSubview(futureProgress)
