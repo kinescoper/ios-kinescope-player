@@ -9,10 +9,10 @@ import AVFoundation
 
 extension KinescopeVideoQuality {
 
-    func makeItem(with dataProtectionHandler: DataProtectionHandler?) -> AVPlayerItem? {
+    func makeItem(with dataProtectionHandler: DataProtectionHandler?, referer: String?) -> AVPlayerItem? {
         switch self {
         case .auto(let hlsLink):
-            return makeAutoItem(from: hlsLink, with: dataProtectionHandler)
+            return makeAutoItem(from: hlsLink, with: dataProtectionHandler, referer: referer)
         case .downloaded(let url):
             return makeDownloadedItem(from: url)
         default:
@@ -26,12 +26,14 @@ extension KinescopeVideoQuality {
 
 fileprivate extension KinescopeVideoQuality {
 
-    func makeAutoItem(from hlsLink: String, with dataProtectionHandler: DataProtectionHandler?) -> AVPlayerItem? {
+    func makeAutoItem(from hlsLink: String,
+                      with dataProtectionHandler: DataProtectionHandler?,
+                      referer: String?) -> AVPlayerItem? {
         guard let url = URL(string: hlsLink) else {
             return nil
         }
 
-        let asset = AVURLAsset(url: url)
+        let asset = AVURLAsset(url: url, options: AVURLAsset.options(referer: referer))
         
 #if !targetEnvironment(simulator)
         dataProtectionHandler?.bind(with: asset)

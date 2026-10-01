@@ -32,9 +32,16 @@ public struct KinescopeFullscreenConfiguration {
 public extension KinescopeFullscreenConfiguration {
 
     static func preferred(for video: KinescopeVideo?, completion: @escaping (KinescopeFullscreenConfiguration) -> Void) {
+        preferred(for: video, referer: Kinescope.shared.config?.referer, completion: completion)
+    }
+
+    /// - parameter referer: `Referer` sent with the master playlist request. Added in 0.3.0-kinescoper.1.
+    static func preferred(for video: KinescopeVideo?,
+                          referer: String?,
+                          completion: @escaping (KinescopeFullscreenConfiguration) -> Void) {
 
         DispatchQueue.global(qos: .userInitiated).async {
-            guard let resolution = video?.firstResolution else {
+            guard let resolution = video?.firstResolution(referer: referer) else {
                 DispatchQueue.main.async {
                     completion(landscape)
                 }

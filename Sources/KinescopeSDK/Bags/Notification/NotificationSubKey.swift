@@ -16,6 +16,7 @@ enum NotificationSubKey {
     case deviceOrientationChanged
     case itemDidPlayToEnd
     case itemFailedToPlayToEndTime
+    case itemNewErrorLogEntry
 
     var notificationName: NSNotification.Name {
         switch self {
@@ -29,6 +30,8 @@ enum NotificationSubKey {
             return AVPlayerItem.didPlayToEndTimeNotification
         case .itemFailedToPlayToEndTime:
             return AVPlayerItem.failedToPlayToEndTimeNotification
+        case .itemNewErrorLogEntry:
+            return AVPlayerItem.newErrorLogEntryNotification
         }
     }
 

@@ -2,7 +2,7 @@ import AVFoundation
 import AVKit
 import UIKit
 
-public class KinescopeVideoPlayer: KinescopePlayer, KinescopePlayerBody, FullscreenStateProvider, PlayingRateSource, VideoQualitySource, SubtitlesSource {
+public class KinescopeVideoPlayer: KinescopePlayer, KinescopePlaybackControllable, KinescopePlayerBody, FullscreenStateProvider, PlayingRateSource, VideoQualitySource, SubtitlesSource {
 
     private enum Constants {
         static let periodicIntervalInSeconds: TimeInterval = 0.01
@@ -62,6 +62,14 @@ public class KinescopeVideoPlayer: KinescopePlayer, KinescopePlayerBody, Fullscr
     private(set) weak var delegate: KinescopeVideoPlayerDelegate?
 
     private var drmHandler: DataProtectionHandler?
+
+    /// Item bound through `select(quality:)`; `nil` after `stop()`.
+    private var boundItem: AVPlayerItem?
+    private var isLoadingVideo = false
+    /// Error log entries of `errorLogItem` already passed to the delegate.
+    private weak var errorLogItem: AVPlayerItem?
+    private var reportedErrorLogCount = 0
+    private var shouldPlayAfterLoad = false
 
     private(set) var isFullScreenModeActive = false
     private(set) var currentRate: KinescopePlayingRate = .normal
@@ -147,13 +155,11 @@ public class KinescopeVideoPlayer: KinescopePlayer, KinescopePlayerBody, Fullscr
 
     public func play() {
         if let video {
-            if !strategy.player.isReadyToPlay {
-                select(quality: .auto(hlsLink: video.hlsLink))
-            }
+            bindItemIfNeeded(for: video)
             self.strategy.play(with: currentRate.rawValue)
             self.delegate?.playerDidPlay()
         } else {
-            self.load()
+            self.load(autoplay: true)
         }
     }
 
@@ -165,6 +171,7 @@ public class KinescopeVideoPlayer: KinescopePlayer, KinescopePlayerBody, Fullscr
     public func stop() {
         self.strategy.pause()
         self.strategy.unbind()
+        boundItem = nil
         self.delegate?.playerDidStop()
     }
 
@@ -204,9 +211,14 @@ public class KinescopeVideoPlayer: KinescopePlayer, KinescopePlayerBody, Fullscr
 
     public func select(quality: KinescopeVideoQuality) {
 
-        savedTime = strategy.player.currentTime()
+        let currentTime = strategy.player.currentTime()
+        // Keep a position requested through `seek(to:)` before the first item was bound.
+        if currentTime.seconds > .zero {
+            savedTime = currentTime
+        }
 
-        if let item = quality.makeItem(with: drmHandler) {
+        if let item = quality.makeItem(with: drmHandler, referer: config.effectiveReferer) {
+            boundItem = item
             strategy.bind(item: item)
         }
 
@@ -225,33 +237,110 @@ public class KinescopeVideoPlayer: KinescopePlayer, KinescopePlayerBody, Fullscr
     public func disableOptions(_ options: [KinescopePlayerOption]) {
         disabledOptions = options
     }
+
+    // MARK: - KinescopePlaybackControllable
+
+    public var currentTime: TimeInterval {
+        let seconds = strategy.player.currentTime().seconds
+        return seconds.isFinite ? seconds : .zero
+    }
+
+    public var duration: TimeInterval? {
+        guard strategy.player.hasFiniteDuration,
+              let seconds = strategy.player.currentItem?.duration.seconds,
+              seconds.isFinite else {
+            return nil
+        }
+        return seconds
+    }
+
+    public func prepare() {
+        if let video {
+            bindItemIfNeeded(for: video)
+        } else {
+            load(autoplay: false)
+        }
+    }
+
+    public func seek(to time: TimeInterval) {
+        let time = max(time, .zero)
+        guard strategy.player.isReadyToPlay else {
+            savedTime = CMTime(seconds: time, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
+            self.time = time
+            return
+        }
+        self.time = time
+        performSeek(to: time)
+    }
 }
 
 // MARK: - Private
 
 private extension KinescopeVideoPlayer {
 
-    /// Sends request video by id and sets player's item
-    func load() {
+    /// Sends request video by id; starts playing on success when `autoplay` was requested
+    /// by this or any call made while the request was in flight, otherwise only binds the item.
+    func load(autoplay: Bool) {
+        shouldPlayAfterLoad = shouldPlayAfterLoad || autoplay
+        guard !isLoadingVideo else {
+            return
+        }
+        isLoadingVideo = true
         view?.startLoader()
 
         dependencies.inspector.video(
             id: config.videoId,
+            referer: config.effectiveReferer,
             onSuccess: { [weak self] video in
-                self?.video = video
-                self?.view?.set(preview: video.poster?.url)
-                self?.view?.overlay?.set(title: video.title, subtitle: video.description)
-                self?.view?.set(options: self?.makePlayerOptions(from: video) ?? [])
-                self?.delegate?.playerDidLoadVideo(error: nil)
-                self?.didPlay()
+                guard let self else {
+                    return
+                }
+                isLoadingVideo = false
+                self.video = video
+                view?.set(preview: video.poster?.url)
+                view?.overlay?.set(title: video.title, subtitle: video.description)
+                view?.set(options: makePlayerOptions(from: video))
+                delegate?.playerDidLoadVideo(error: nil)
+                if shouldPlayAfterLoad {
+                    shouldPlayAfterLoad = false
+                    didPlay()
+                } else {
+                    bindItemIfNeeded(for: video)
+                }
             },
             onError: { [weak self] error in
+                self?.isLoadingVideo = false
+                self?.shouldPlayAfterLoad = false
                 self?.view?.stopLoader()
                 self?.view?.errorOverlay?.display(error: error)
                 self?.delegate?.playerDidLoadVideo(error: error)
                 Kinescope.shared.logger?.log(error: error, level: KinescopeLoggerLevel.network)
             }
         )
+    }
+
+    /// Binds a new item when there is none or the current one failed, so `play()` after `prepare()`
+    /// keeps the already buffering item.
+    func bindItemIfNeeded(for video: KinescopeVideo) {
+        if boundItem == nil || strategy.player.currentItem?.status == .failed {
+            select(quality: .auto(hlsLink: video.hlsLink))
+        }
+    }
+
+    /// Whether `item` belongs to this player; AVPlayerItem notifications are observed process-wide.
+    func owns(_ item: AVPlayerItem) -> Bool {
+        if item === strategy.player.currentItem || item === boundItem {
+            return true
+        }
+        return (strategy.player as? AVQueuePlayer)?.items().contains(item) ?? false
+    }
+
+    func onMain(_ action: @escaping () -> Void) {
+        if Thread.isMainThread {
+            action()
+        } else {
+            DispatchQueue.main.async(execute: action)
+        }
     }
 
     func makePlayerOptions(from video: KinescopeVideo) -> [KinescopePlayerOption] {
@@ -341,8 +430,11 @@ private extension KinescopeVideoPlayer {
     }
 
     func addPlayerItemStatusObserver() {
-        let observerFactory = CurrentItemStatusObserver(playerBody: self, 
+        let observerFactory = CurrentItemStatusObserver(playerBody: self,
                                                         repeater: $playRepeater,
+                                                        failureReceived: { [weak self] item, error, willRetry in
+            self?.reportFailure(.itemStatus, item: item, error: error, willRetry: willRetry)
+        },
                                                         readyToPlayReceived: { [weak self] in
             guard let self, let video else {
                 return
@@ -351,7 +443,7 @@ private extension KinescopeVideoPlayer {
             if seconds > .zero {
                 time = seconds
                 savedTime = .zero
-                seek(to: seconds)
+                performSeek(to: seconds)
             }
             isLive = video.type == .live && strategy.player.isReadyToPlay
         })
@@ -377,6 +469,8 @@ private extension KinescopeVideoPlayer {
                                      using: .init(selector: #selector(itemDidPlayToEnd)))
         notificationsBag.addObserver(for: .itemFailedToPlayToEndTime,
                                      using: .init(selector: #selector(itemFailedToPlayeToEndTime)))
+        notificationsBag.addObserver(for: .itemNewErrorLogEntry,
+                                     using: .init(selector: #selector(itemNewErrorLogEntry)))
     }
     
     func configureAnalytic() {
@@ -385,7 +479,7 @@ private extension KinescopeVideoPlayer {
         analyticStorage.playbackInput.setFullscreenStateProvider(self)
     }
 
-    func seek(to seconds: TimeInterval) {
+    func performSeek(to seconds: TimeInterval) {
         let duration = strategy.player.durationSeconds ?? .zero
         // end of timeline reached
         if seconds >= duration {
@@ -440,13 +534,74 @@ private extension KinescopeVideoPlayer {
         }
     }
 
-    @objc func itemDidPlayToEnd() {
-        analytic?.send(event: .end)
+    @objc func itemDidPlayToEnd(_ notification: Notification) {
+        guard let item = notification.object as? AVPlayerItem else {
+            return
+        }
+        onMain { [weak self] in
+            guard let self, owns(item) else {
+                return
+            }
+            analytic?.send(event: .end)
+            if !config.looped {
+                delegate?.playerDidFinish()
+            }
+        }
     }
 
     @objc func itemFailedToPlayeToEndTime(_ notification: Notification) {
         let error = notification.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? Error
         Kinescope.shared.logger?.log(error: error, level: KinescopeLoggerLevel.player)
+        guard let item = notification.object as? AVPlayerItem else {
+            return
+        }
+        onMain { [weak self] in
+            guard let self, owns(item) else {
+                return
+            }
+            reportFailure(.failedToPlayToEnd, item: item, error: error, willRetry: false)
+        }
+    }
+
+    @objc func itemNewErrorLogEntry(_ notification: Notification) {
+        guard let item = notification.object as? AVPlayerItem else {
+            return
+        }
+        onMain { [weak self] in
+            guard let self, owns(item) else {
+                return
+            }
+            reportNewErrorLogEntries(of: item)
+        }
+    }
+
+    /// AVFoundation does not always post `newErrorLogEntryNotification` (e.g. when the item fails
+    /// right away), so new entries are also flushed before every failure; each entry is reported once.
+    func reportNewErrorLogEntries(of item: AVPlayerItem) {
+        if errorLogItem !== item {
+            errorLogItem = item
+            reportedErrorLogCount = 0
+        }
+        let events = item.errorLog()?.events ?? []
+        guard events.count > reportedErrorLogCount else {
+            return
+        }
+        let newEvents = events[reportedErrorLogCount...]
+        reportedErrorLogCount = events.count
+        for event in newEvents {
+            let entry = KinescopePlaybackErrorLogEntry(event: event)
+            Kinescope.shared.logger?.log(message: "AVPlayerItem error log: \(entry)",
+                                         level: KinescopeLoggerLevel.player)
+            delegate?.player(didReceiveErrorLogEntry: entry)
+        }
+    }
+
+    func reportFailure(_ source: KinescopePlaybackFailure.Source, item: AVPlayerItem, error: Error?, willRetry: Bool) {
+        reportNewErrorLogEntries(of: item)
+        delegate?.player(didFailWith: KinescopePlaybackFailure(source: source,
+                                                               item: item,
+                                                               error: error,
+                                                               willRetry: willRetry))
     }
 
     func restoreView() {
@@ -496,7 +651,7 @@ extension KinescopeVideoPlayer: KinescopePlayerViewDelegate {
         // Playing from start should not be available for live streams
         if time == duration && strategy.player.hasFiniteDuration {
             time = .zero
-            seek(to: time)
+            performSeek(to: time)
             analytic?.send(event: .replay)
         }
         
@@ -531,7 +686,7 @@ extension KinescopeVideoPlayer: KinescopePlayerViewDelegate {
         Kinescope.shared.logger?.log(message: "timeline change to time: \(time) confirmed",
                                      level: KinescopeLoggerLevel.player)
         analytic?.send(event: .seek)
-        seek(to: time)
+        performSeek(to: time)
     }
 
     func didFastForward() {
@@ -543,7 +698,7 @@ extension KinescopeVideoPlayer: KinescopePlayerViewDelegate {
 
         time = min(duration, time + 15)
         analytic?.send(event: .seek)
-        seek(to: time)
+        performSeek(to: time)
 
         delegate?.player(didFastForwardTo: time)
     }
@@ -553,7 +708,7 @@ extension KinescopeVideoPlayer: KinescopePlayerViewDelegate {
 
         time = max(time - 15.0, .zero)
         analytic?.send(event: .seek)
-        seek(to: time)
+        performSeek(to: time)
 
         delegate?.player(didFastBackwardTo: time)
     }

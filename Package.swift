@@ -39,6 +39,7 @@ let package = Package(
                 "KinescopeSDK"
             ],
             path: "Sources/KinescopeSDKTests",
-            exclude: ["Info.plist"])
+            exclude: ["Info.plist"],
+            resources: [.copy("Fixtures")])
     ]
 )

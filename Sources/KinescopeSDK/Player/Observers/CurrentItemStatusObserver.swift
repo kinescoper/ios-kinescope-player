@@ -14,12 +14,16 @@ final class CurrentItemStatusObserver: KVOObserverFactory {
     private weak var repeater: Repeater?
 
     private var readyToPlayReceived: () -> Void
+    /// Item, its error and whether the SDK's repeater scheduled another attempt.
+    private var failureReceived: (AVPlayerItem, Error?, Bool) -> Void
 
     init(playerBody: KinescopePlayerBody,
          repeater: Repeater,
+         failureReceived: @escaping (AVPlayerItem, Error?, Bool) -> Void,
          readyToPlayReceived: @escaping () -> Void) {
         self.playerBody = playerBody
         self.repeater = repeater
+        self.failureReceived = failureReceived
         self.readyToPlayReceived = readyToPlayReceived
     }
 
@@ -38,7 +42,10 @@ final class CurrentItemStatusObserver: KVOObserverFactory {
                 case .failed, .unknown:
                     Kinescope.shared.logger?.log(error: item.error,
                                                  level: KinescopeLoggerLevel.player)
-                    onError(error: item.error)
+                    let willRetry = onError(error: item.error)
+                    if item.status == .failed {
+                        failureReceived(item, item.error, willRetry)
+                    }
                 default:
                     break
                 }
@@ -63,13 +70,14 @@ private extension CurrentItemStatusObserver {
         playerBody?.view?.overlay?.isHidden = false
     }
 
-    func onError(error: Error?) {
+    /// Returns `true` when the repeater scheduled another attempt.
+    func onError(error: Error?) -> Bool {
         // CoreMediaErrorDomain error -16190 means that live stream is not ready to play
         if let error = error as NSError?, error.code == -16190 {
             showLiveStub()
-            tryRepeat(with: nil)
+            return tryRepeat(with: nil)
         } else {
-            tryRepeat(with: error)
+            return tryRepeat(with: error)
         }
     }
     
@@ -80,15 +88,18 @@ private extension CurrentItemStatusObserver {
         playerBody?.view?.announceSnack?.display(startsAt: video.live?.startsAt)
     }
 
-    func tryRepeat(with error: Error?) {
+    @discardableResult
+    func tryRepeat(with error: Error?) -> Bool {
         switch repeater?.start() {
         case .inProgress:
             playerBody?.view?.startLoader()
+            return true
         case .limitReached, .none:
             playerBody?.view?.stopLoader(withPreview: false)
             if let error {
                 playerBody?.view?.errorOverlay?.display(error: error)
             }
+            return false
         }
     }
 

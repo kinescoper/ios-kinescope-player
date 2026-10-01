@@ -13,6 +13,7 @@ final class KinescopeInspectableMock: KinescopeInspectable {
 
     private(set) var listRequests = [KinescopeVideosRequest]()
     private(set) var videoRequests = [String]()
+    private(set) var videoReferers = [String?]()
 
     // MARK: - Mock Properties
 
@@ -35,14 +36,38 @@ final class KinescopeInspectableMock: KinescopeInspectable {
         }
     }
 
-    func video(id: String, onSuccess: @escaping (KinescopeVideo) -> Void, onError: @escaping (KinescopeInspectError) -> Void) {
-        videoRequests.append(id)
+    var videoErrorMock: [String: KinescopeInspectError] = [:]
+    /// Keeps completions instead of calling them, to test calls made while loading.
+    var defersCompletion = false
+    private(set) var pendingCompletions = [() -> Void]()
 
-        if let result = videoSuccessMock[id] {
-            onSuccess(result)
+    func video(id: String,
+               referer: String?,
+               onSuccess: @escaping (KinescopeVideo) -> Void,
+               onError: @escaping (KinescopeInspectError) -> Void) {
+        videoRequests.append(id)
+        videoReferers.append(referer)
+
+        let completion: () -> Void
+        if let error = videoErrorMock[id] {
+            completion = { onError(error) }
+        } else if let result = videoSuccessMock[id] {
+            completion = { onSuccess(result) }
         } else {
-            onSuccess(.stub())
+            completion = { onSuccess(.stub()) }
         }
+
+        if defersCompletion {
+            pendingCompletions.append(completion)
+        } else {
+            completion()
+        }
+    }
+
+    func completePending() {
+        let completions = pendingCompletions
+        pendingCompletions.removeAll()
+        completions.forEach { $0() }
     }
 
 }

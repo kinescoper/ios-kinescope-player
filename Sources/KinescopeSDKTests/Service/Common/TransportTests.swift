@@ -27,6 +27,7 @@ final class TransportTests: XCTestCase {
             case success
             case serverError
             case otherError
+            case status(Int)
         }
 
         private let result: Result
@@ -56,6 +57,11 @@ final class TransportTests: XCTestCase {
             case .otherError:
                 return MockURLSessionDataTask {
                     completionHandler(nil, nil, RequestBuilderError.wrongURL)
+                }
+            case .status(let code):
+                let response = HTTPURLResponse(url: URL(string: "https://example.com/v.json")!, statusCode: code, httpVersion: nil, headerFields: nil)
+                return MockURLSessionDataTask {
+                    completionHandler(Data(), response, nil)
                 }
             }
         }
@@ -120,7 +126,7 @@ final class TransportTests: XCTestCase {
 
         wait(for: [exp], timeout: 5.0)
 
-        XCTAssertTrue(err is ServerError)
+        XCTAssertEqual((err as? KinescopeHTTPError)?.statusCode, 400)
         XCTAssertNil(res)
     }
 
@@ -152,6 +158,42 @@ final class TransportTests: XCTestCase {
 
         XCTAssertTrue(err is RequestBuilderError)
         XCTAssertNil(res)
+    }
+
+    func testNon2xxWithoutBodyCompletesWithHTTPError() {
+        for code in [401, 404, 410, 500, 503] {
+            let exp = expectation(description: "status \(code)")
+            let transport = Transport(session: MockURLSession(result: .status(code)))
+            var err: Error?
+
+            transport.performFetch(request: URLRequest(url: URL(string: "https://example.com/v.json")!)) { (response: Result<MockVideo, Error>) in
+                if case .failure(let error) = response {
+                    err = error
+                }
+                exp.fulfill()
+            }
+
+            wait(for: [exp], timeout: 5.0)
+            let httpError = err as? KinescopeHTTPError
+            XCTAssertEqual(httpError?.statusCode, code)
+            XCTAssertEqual(httpError?.url, URL(string: "https://example.com/v.json"))
+        }
+    }
+
+    func testRawNon2xxCompletesWithHTTPError() {
+        let exp = expectation(description: "raw")
+        let transport = Transport(session: MockURLSession(result: .status(500)))
+        var err: Error?
+
+        transport.performRaw(request: URLRequest(url: URL(string: "https://example.com")!)) { response in
+            if case .failure(let error) = response {
+                err = error
+            }
+            exp.fulfill()
+        }
+
+        wait(for: [exp], timeout: 5.0)
+        XCTAssertEqual((err as? KinescopeHTTPError)?.statusCode, 500)
     }
 }
 //swiftlint:enable all

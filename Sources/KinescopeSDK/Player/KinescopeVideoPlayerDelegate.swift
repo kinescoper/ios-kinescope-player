@@ -41,6 +41,15 @@ public protocol KinescopeVideoPlayerDelegate: AnyObject {
     func player(changedQualityTo quality: String)
     /// Triggered on custom option button selected in options menu
     func player(didSelectCustomOptionWith optionId: AnyHashable, anchoredAt view: UIView)
+    /// Triggered when the current item played to its end. Not sent for looped players.
+    /// Added in 0.3.0-kinescoper.1.
+    func playerDidFinish()
+    /// Triggered on a fatal failure of the current item (status `.failed` or failed to play to end).
+    /// Added in 0.3.0-kinescoper.1.
+    func player(didFailWith failure: KinescopePlaybackFailure)
+    /// Triggered for every new entry of the current item's error log, fatal or not.
+    /// Added in 0.3.0-kinescoper.1.
+    func player(didReceiveErrorLogEntry entry: KinescopePlaybackErrorLogEntry)
 }
 
 public extension KinescopeVideoPlayerDelegate {
@@ -59,4 +68,7 @@ public extension KinescopeVideoPlayerDelegate {
     func player(didFastForwardTo time: TimeInterval) { }
     func player(didFastBackwardTo time: TimeInterval) { }
     func player(changedQualityTo quality: String) { }
+    func playerDidFinish() { }
+    func player(didFailWith failure: KinescopePlaybackFailure) { }
+    func player(didReceiveErrorLogEntry entry: KinescopePlaybackErrorLogEntry) { }
 }
