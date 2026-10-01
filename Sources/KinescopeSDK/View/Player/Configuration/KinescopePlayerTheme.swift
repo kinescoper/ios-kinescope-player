@@ -289,7 +289,7 @@ public extension KinescopePlayerTheme {
             self.glyphOffset = glyphOffset
         }
 
-        /// Figma «Player» `M / Play` in the paused `Controls` (`20485:44511`): a 56-point glyph without a circle,
+        /// Figma «Player» `M / Play` in the paused `Controls` (`2908:16201`): a 56-point glyph without a circle,
         /// a 24-point design system icon drawn like an instance resized from 24 to 56.
         public static let glyphOnly = PlayButton(diameter: 56, background: .clear, glyphScale: 56.0 / 24.0)
     }
@@ -356,7 +356,7 @@ public extension KinescopePlayerTheme {
             /// The SDK's own: a sheet over the whole height that slides in from the trailing edge, with a title
             /// bar and a close button on every level.
             case sideSheet
-            /// A card in the trailing bottom corner (Figma «Player» `Settings/Normal`, `20485:44516`): no title
+            /// A card in the trailing bottom corner (Figma «Player» `Settings/Normal`, `9494:114269`): no title
             /// on the root level, a back row with the title on a nested one, no close button (a tap outside closes).
             /// - parameter width: Card width, at most the player width less the margins.
             /// - parameter margins: Distance from the player edges; the card grows up from the bottom margin
@@ -482,14 +482,8 @@ public extension KinescopePlayerTheme {
         public var overlayDim: UIColor
         /// Video title and subtitle over the video.
         public var title: UIColor
-        /// Background of the control bar, drawn inside ``Metrics/controlBarInsets`` with
-        /// ``Metrics/controlBarCornerRadius``. `nil`: no background.
-        public var controlBarBackground: UIColor?
         /// Halo around the timeline thumb while it is dragged. `nil`: no halo.
         public var timelineThumbHalo: UIColor?
-        /// Circle behind a pressed option and behind a pressed glyph-only play button (Figma «Player» `Settings 3`
-        /// State=Hovered `20485:48137`: `Surface/inverse/neutral/tertiary` behind the glyph). `nil`: no circle.
-        public var optionPressedBackground: UIColor?
 
         public init(icon: UIColor,
                     iconPressed: UIColor?,
@@ -504,9 +498,7 @@ public extension KinescopePlayerTheme {
                     overlayDim: UIColor,
                     title: UIColor,
                     playButtonPressedOverlay: UIColor? = nil,
-                    controlBarBackground: UIColor? = nil,
-                    timelineThumbHalo: UIColor? = UIColor(red: 1, green: 1, blue: 1, alpha: 0.16),
-                    optionPressedBackground: UIColor? = nil) {
+                    timelineThumbHalo: UIColor? = UIColor(red: 1, green: 1, blue: 1, alpha: 0.16)) {
             self.icon = icon
             self.iconPressed = iconPressed
             self.text = text
@@ -520,9 +512,7 @@ public extension KinescopePlayerTheme {
             self.playButtonIcon = playButtonIcon
             self.overlayDim = overlayDim
             self.title = title
-            self.controlBarBackground = controlBarBackground
             self.timelineThumbHalo = timelineThumbHalo
-            self.optionPressedBackground = optionPressedBackground
         }
 
         public static let `default` = Colors(
@@ -623,12 +613,8 @@ public extension KinescopePlayerTheme {
         public var timelineThumbVisibleWhenIdle: Bool
         /// `true` reserves the width of `H:MM:SS` for the time; `false` sizes it to the current text.
         public var timeReservesHours: Bool
-        /// Padding of the time, the timeline and the options inside the control bar background.
-        public var controlBarPadding: UIEdgeInsets
-        /// Rounding of the control bar background, at most half its height.
-        public var controlBarCornerRadius: CGFloat
-        /// Diameter of ``Colors/optionPressedBackground`` behind an option.
-        public var optionPressedDiameter: CGFloat
+        /// Diameter of the play button's circle while pressed, the glyph staying put. `nil`: the circle keeps its size.
+        public var playButtonPressedDiameter: CGFloat?
 
         public init(controlBarInsets: UIEdgeInsets,
                     controlBarHeight: CGFloat,
@@ -645,9 +631,7 @@ public extension KinescopePlayerTheme {
                     timelineThumbRadius: CGFloat,
                     timelineThumbVisibleWhenIdle: Bool,
                     timeReservesHours: Bool,
-                    controlBarPadding: UIEdgeInsets = .zero,
-                    controlBarCornerRadius: CGFloat = 0,
-                    optionPressedDiameter: CGFloat = 32) {
+                    playButtonPressedDiameter: CGFloat? = nil) {
             self.controlBarInsets = controlBarInsets
             self.controlBarHeight = controlBarHeight
             self.controlBarSpacing = controlBarSpacing
@@ -663,9 +647,7 @@ public extension KinescopePlayerTheme {
             self.timelineThumbRadius = timelineThumbRadius
             self.timelineThumbVisibleWhenIdle = timelineThumbVisibleWhenIdle
             self.timeReservesHours = timeReservesHours
-            self.controlBarPadding = controlBarPadding
-            self.controlBarCornerRadius = controlBarCornerRadius
-            self.optionPressedDiameter = optionPressedDiameter
+            self.playButtonPressedDiameter = playButtonPressedDiameter
         }
 
         /// The SDK's own geometry.
@@ -709,9 +691,10 @@ public extension KinescopePlayerTheme {
             timeReservesHours: false
         )
 
-        /// Figma «Player» file (`20485:44504`): a pill bar 343×44 16 from the sides and 8 from the bottom, padded 8
-        /// with 24-point rounding, a 28-point row with 12-point gaps, 28-point options 12 apart, the 72-point start
-        /// play button with a 36-point glyph 2 points right of the center, a rounded 4-point track with a 16-point
+        /// Figma «Player» file, the mobile player component (`7316:33975`, the set the Android player follows): a
+        /// 28-point bar without a background 16 from the sides and 8 from the bottom with 12-point gaps, 28-point
+        /// options 12 apart, the 72-point start play button with a 36-point glyph 2 points right of the center
+        /// that grows to 80 while pressed (`Play button` `12403:87961`), a rounded 4-point track with a 16-point
         /// thumb only while dragged, time as wide as its text.
         public static let player = Metrics(
             controlBarInsets: UIEdgeInsets(top: 0, left: 16, bottom: 8, right: 16),
@@ -729,8 +712,7 @@ public extension KinescopePlayerTheme {
             timelineThumbRadius: 8,
             timelineThumbVisibleWhenIdle: false,
             timeReservesHours: false,
-            controlBarPadding: UIEdgeInsets(top: 8, left: 8, bottom: 8, right: 8),
-            controlBarCornerRadius: 24
+            playButtonPressedDiameter: 80
         )
     }
 

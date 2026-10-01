@@ -114,22 +114,29 @@ final class PlayerOverlayView: UIControl {
         let colors = theme.colors
         let style = playButtonStyle
         let isGlyphOnly = style.isGlyphOnly
+        let pressedDiameter = theme.metrics.playButtonPressedDiameter
         guard isGlyphOnly
-            ? colors.iconPressed != nil || colors.optionPressedBackground != nil
-            : colors.playButtonBackgroundPressed != nil || colors.playButtonPressedOverlay != nil else {
+            ? colors.iconPressed != nil
+            : colors.playButtonBackgroundPressed != nil || colors.playButtonPressedOverlay != nil
+                || pressedDiameter != nil else {
             return
         }
         let wasPressed = isPlayButtonPressed
         isPlayButtonPressed = pressed
         let pressedBackground = colors.playButtonBackgroundPressed ?? style.background
+        // The circle grows around the glyph that stays put (Figma «Play button» Hovered: 72 → 80).
+        let growth = pressedDiameter.map { $0 / max(style.diameter, 1) } ?? 1
         let changes = {
             if isGlyphOnly {
-                // A glyph without a fill gets the options' pressed circle, or changes its colour.
+                // A glyph without a fill changes its colour.
                 self.setPlayGlyphTint(pressed ? colors.iconPressed : nil)
-                self.playPressedCircle.alpha = pressed && colors.optionPressedBackground != nil ? 1 : 0
             } else {
                 self.playBackgroundCircle.backgroundColor = pressed ? pressedBackground : style.background
                 self.playPressedCircle.alpha = pressed && colors.playButtonPressedOverlay != nil ? 1 : 0
+                let scale = pressed ? growth : 1
+                for circle in [self.playBackgroundCircle, self.playPressedCircle] {
+                    circle.transform = CGAffineTransform(scaleX: scale, y: scale)
+                }
             }
         }
         let duration = theme.playPauseAnimation.duration
@@ -318,10 +325,10 @@ private extension PlayerOverlayView {
             circle.layer.cornerRadius = style.diameter / 2
         }
         playBackgroundCircle.backgroundColor = style.background
-        playPressedCircle.backgroundColor = style.isGlyphOnly
-            ? theme.colors.optionPressedBackground
-            : theme.colors.playButtonPressedOverlay
+        playPressedCircle.backgroundColor = theme.colors.playButtonPressedOverlay
         playPressedCircle.alpha = 0
+        playBackgroundCircle.transform = .identity
+        playPressedCircle.transform = .identity
         isPlayButtonPressed = false
         setPlayGlyphTint(nil)
         // The morphing glyph is built at the start screen's scale.

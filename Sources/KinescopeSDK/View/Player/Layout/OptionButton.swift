@@ -13,8 +13,6 @@ final class OptionButton: UIButton {
 
     private let theme: KinescopePlayerTheme
     private let normalColor: UIColor
-    /// ``KinescopePlayerTheme/Colors/optionPressedBackground`` while pressed.
-    private(set) var pressedCircle: UIView?
 
     init(option: KinescopePlayerOption,
          theme: KinescopePlayerTheme = .default,
@@ -68,14 +66,11 @@ private extension OptionButton {
             setImage(iconSelected, for: .selected)
         }
 
-        // A pressed icon changes its color or gets a circle, not the system dimming.
-        if theme.colors.iconPressed != nil || theme.colors.optionPressedBackground != nil {
+        // A pressed icon changes its color, without a background (docs: tap states of elements without a fill).
+        if theme.colors.iconPressed != nil {
             adjustsImageWhenHighlighted = false
         }
         imageView?.contentMode = .center
-        if let background = theme.colors.optionPressedBackground {
-            configurePressedCircle(color: background)
-        }
         accessibilityLabel = theme.accessibilityLabels.label(for: option, isFullscreen: isFullscreen)
         updateTint()
     }
@@ -83,25 +78,6 @@ private extension OptionButton {
     func updateTint() {
         let pressed = theme.colors.iconPressed
         tintColor = isHighlighted ? (pressed ?? normalColor) : normalColor
-        pressedCircle?.isHidden = !isHighlighted
-    }
-
-    func configurePressedCircle(color: UIColor) {
-        let circle = UIView()
-        let diameter = theme.metrics.optionPressedDiameter
-        circle.backgroundColor = color
-        circle.layer.cornerRadius = diameter / 2
-        circle.isUserInteractionEnabled = false
-        circle.isHidden = true
-        insertSubview(circle, at: 0)
-        circle.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            circle.centerXAnchor.constraint(equalTo: centerXAnchor),
-            circle.centerYAnchor.constraint(equalTo: centerYAnchor),
-            circle.widthAnchor.constraint(equalToConstant: diameter),
-            circle.heightAnchor.constraint(equalToConstant: diameter)
-        ])
-        pressedCircle = circle
     }
 
 }

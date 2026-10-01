@@ -126,7 +126,7 @@ final class KinescopePlayerViewSnapshotRenderer: XCTestCase {
         try save(controller.view, to: directory.appendingPathComponent("hls-themed-fullscreen-landscape.png"))
     }
 
-    /// Every M2 state of the Figma «Player» file (`20485:44504`) drawn with ``playerFileTheme``, named after the
+    /// Every M2 state of the Figma «Player» mobile component (`7316:33975`) drawn with ``playerFileTheme``, named after the
     /// Figma frames they are compared with.
     func testRenderPlayerFileStates() throws {
         let directory = try outputDirectory()
@@ -138,9 +138,12 @@ final class KinescopePlayerViewSnapshotRenderer: XCTestCase {
                   subtitlesProvider: SubtitlesProvider(source: sources))
         view.set(options: [.subtitles, .airPlay, .settings, .pip, .fullscreen, .more])
 
-        // Idle: the poster and the 72-point play button only.
+        // Idle: the poster and the 72-point play button only; then held down: 80 points, full accent.
         view.stopLoader()
         try save(view, to: directory.appendingPathComponent("player-1-idle.png"))
+        view.overlay?.setPlayButtonPressed(true)
+        try save(view, to: directory.appendingPathComponent("player-1b-idle-pressed.png"))
+        view.overlay?.setPlayButtonPressed(false)
 
         // Paused with the chrome: dim, the 56-point play glyph, the pill bar at 12:49.
         view.skipStartScreen()
@@ -165,7 +168,7 @@ final class KinescopePlayerViewSnapshotRenderer: XCTestCase {
         try save(view, to: directory.appendingPathComponent("player-4-dragging.png"))
         view.controlPanel?.timeline.isTouching = false
 
-        // The three dots held down: the pressed circle.
+        // The three dots held down: the pressed colour.
         let more = Self.optionButtons(in: view).first { $0.option == .more }
         more?.isHighlighted = true
         try save(view, to: directory.appendingPathComponent("player-4b-pressed.png"))
@@ -229,8 +232,9 @@ final class KinescopePlayerViewSnapshotRenderer: XCTestCase {
         }
     }
 
-    /// The Kinescope app's theme by the Figma «Player» file: ``KinescopePlayerTheme/Metrics/player``, the pill bar,
-    /// the glyph-only chrome button, the card menu with row glyphs and the 16% cover.
+    /// The Kinescope app's theme by the Figma «Player» mobile component (`7316:33975`):
+    /// ``KinescopePlayerTheme/Metrics/player``, the glyph-only chrome button, the card menu with row glyphs and the
+    /// 16% cover.
     static var playerFileTheme: KinescopePlayerTheme {
         var theme = appLikeTheme
         let base = theme.icons
@@ -248,17 +252,13 @@ final class KinescopePlayerViewSnapshotRenderer: XCTestCase {
         }
         theme.metrics = .player
         theme.colors.overlayDim = UIColor(red: 0x11 / 255, green: 0x11 / 255, blue: 0x11 / 255, alpha: 0.16)
-        theme.colors.controlBarBackground = UIColor(red: 0x11 / 255, green: 0x11 / 255, blue: 0x11 / 255, alpha: 0.32)
         theme.colors.timelineThumbHalo = nil
-        theme.colors.playButtonBackgroundPressed = nil
         theme.colors.iconPressed = UIColor.white.withAlphaComponent(0.64)
         theme.startScreen = .posterAndPlayButton
         theme.playPauseAnimation = .morph
         theme.chromePlayButton = .glyphOnly
         theme.menu = .card
         theme.seekFeedback = .sideArea
-        theme.colors.optionPressedBackground = UIColor.white.withAlphaComponent(0.08)
-        theme.colors.iconPressed = nil
         return theme
     }
 

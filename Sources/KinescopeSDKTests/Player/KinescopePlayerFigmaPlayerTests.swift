@@ -1,16 +1,15 @@
 import XCTest
 @testable import KinescopeSDK
 
-/// The theme slots for the Figma «Player» file (`20485:44504`): the pill bar, the glyph-only chrome button, the
-/// card menu, the lit seek sides and the circle under the three dots.
+/// The theme slots for the Figma «Player» file, the mobile player component (`7316:33975`): the bar geometry, the
+/// start button growing while pressed, the glyph-only chrome button, the card menu and the lit seek sides.
 final class KinescopePlayerFigmaPlayerTests: XCTestCase {
 
     private enum Constants {
         static let size = CGSize(width: 375, height: 211)
         static let options: [KinescopePlayerOption] = [.subtitles, .airPlay, .settings, .pip, .fullscreen, .more]
-        static let black32 = UIColor(red: 0x11 / 255, green: 0x11 / 255, blue: 0x11 / 255, alpha: 0.32)
+        static let accent = UIColor(red: 0x61 / 255, green: 0x61 / 255, blue: 0xfc / 255, alpha: 1)
         static let pressed = UIColor(white: 1, alpha: 0.64)
-        static let white8 = UIColor(white: 1, alpha: 0.08)
     }
 
     private var window: UIWindow?
@@ -26,65 +25,33 @@ final class KinescopePlayerFigmaPlayerTests: XCTestCase {
     func testDefaultThemeKeepsTheSDKLook() {
         let theme = KinescopePlayerTheme.default
 
-        XCTAssertNil(theme.colors.controlBarBackground)
-        XCTAssertNil(theme.colors.optionPressedBackground)
+        XCTAssertNil(theme.metrics.playButtonPressedDiameter)
         XCTAssertNotNil(theme.colors.timelineThumbHalo)
         XCTAssertNil(theme.chromePlayButton)
         XCTAssertEqual(theme.menu.presentation, .sideSheet)
         XCTAssertFalse(theme.menu.isCard)
-        XCTAssertEqual(theme.metrics.controlBarPadding, .zero)
         guard case .icon = theme.seekFeedback.style else {
             return XCTFail("The default seek feedback is the SDK's glyph")
         }
     }
 
-    func testDefaultBarHasNoBackground() throws {
-        let view = makePlayerView(theme: .default)
-        let panel = try XCTUnwrap(view.controlPanel)
-
-        XCTAssertTrue(panel.barBackground.isHidden)
-    }
-
     // MARK: - Control bar
 
-    func testPillBarFollowsFigma() throws {
+    func testControlBarFollowsTheMobileComponent() throws {
         let view = makePlayerView(theme: makeTheme())
         let panel = try XCTUnwrap(view.controlPanel)
         panel.setIndicator(to: 769)
         view.layoutIfNeeded()
 
-        // Figma «Control bar» 20485:47990: 343×44 at x 16, y 159, padded 8, gaps 12, rounded to a capsule.
-        let pill = panel.convert(panel.barBackground.frame, to: view)
-        XCTAssertEqual(pill, CGRect(x: 16, y: 159, width: 343, height: 44))
-        XCTAssertFalse(panel.barBackground.isHidden)
-        XCTAssertEqual(panel.barBackground.backgroundColor, Constants.black32)
-        XCTAssertEqual(panel.barBackground.layer.cornerRadius, 22)
-        XCTAssertEqual(panel.timeIndicator.frame.minX, 16 + 8)
-        XCTAssertEqual(panel.optionsMenu.frame.maxX, Constants.size.width - 16 - 8, accuracy: 0.5)
+        // Figma «Control bar» 9481:131395 in Type=Mobile 7316:33975: a 343×28 row at x 16, y 175, gaps 12.
+        XCTAssertEqual(panel.frame.maxY, Constants.size.height)
+        XCTAssertEqual(panel.frame.height, 28 + 8)
+        XCTAssertEqual(panel.timeIndicator.frame.minX, 16)
+        XCTAssertEqual(panel.optionsMenu.frame.maxX, Constants.size.width - 16, accuracy: 0.5)
         XCTAssertEqual(panel.optionsMenu.frame.width, 28 + 12 + 28, accuracy: 0.5)
         XCTAssertEqual(panel.timeline.frame.minX - panel.timeIndicator.frame.maxX, 12, accuracy: 0.5)
         XCTAssertEqual(panel.optionsMenu.frame.minX - panel.timeline.frame.maxX, 12, accuracy: 0.5)
-        XCTAssertEqual(panel.convert(panel.optionsMenu.frame, to: view).midY, 159 + 22, accuracy: 0.5)
-    }
-
-    func testPressedOptionShowsACircle() throws {
-        let view = makePlayerView(theme: makeTheme())
-        let buttons = view.allSubviews { $0 is OptionButton }.compactMap { $0 as? OptionButton }
-        let more = try XCTUnwrap(buttons.first { $0.option == .more })
-        let circle = try XCTUnwrap(more.pressedCircle)
-        view.layoutIfNeeded()
-
-        // Figma «Settings 3» State=Hovered 20485:48137: a 32-point circle behind the glyph.
-        XCTAssertTrue(circle.isHidden)
-        XCTAssertEqual(circle.bounds.size, CGSize(width: 32, height: 32))
-        XCTAssertEqual(circle.center, CGPoint(x: more.bounds.midX, y: more.bounds.midY))
-        XCTAssertEqual(circle.backgroundColor, Constants.white8)
-        XCTAssertFalse(more.adjustsImageWhenHighlighted)
-
-        more.isHighlighted = true
-        XCTAssertFalse(circle.isHidden)
-        more.isHighlighted = false
-        XCTAssertTrue(circle.isHidden)
+        XCTAssertEqual(panel.convert(panel.optionsMenu.frame, to: view).midY, 175 + 14, accuracy: 0.5)
     }
 
     func testDraggedThumbHasNoHaloWithoutAColor() throws {
@@ -121,7 +88,7 @@ final class KinescopePlayerFigmaPlayerTests: XCTestCase {
         view.skipStartScreen()
         view.layoutIfNeeded()
 
-        // Figma «M / Play» 20485:44511 in the paused Controls: a 56-point glyph, no circle.
+        // Figma «M / Play» 2908:16201 in the paused Controls: a 56-point glyph, no circle.
         XCTAssertEqual(overlay.playButtonStyle.diameter, 56)
         XCTAssertTrue(overlay.playButtonStyle.isGlyphOnly)
         XCTAssertEqual(overlay.playButtonFrameInOverlay.width, 56, accuracy: 0.5)
@@ -130,7 +97,6 @@ final class KinescopePlayerFigmaPlayerTests: XCTestCase {
 
     func testGlyphOnlyButtonTintsTheGlyphWhenPressed() throws {
         var theme = makeTheme()
-        theme.colors.optionPressedBackground = nil
         let view = makePlayerView(theme: theme)
         let overlay = try XCTUnwrap(view.overlay)
         let glyph = try XCTUnwrap(overlay.playPauseGlyphView)
@@ -142,15 +108,23 @@ final class KinescopePlayerFigmaPlayerTests: XCTestCase {
         XCTAssertEqual(glyph.tintColor, .white)
     }
 
-    func testGlyphOnlyButtonShowsThePressedCircle() throws {
-        let view = makePlayerView(theme: makeTheme())
+    func testStartButtonGrowsWhenPressed() throws {
+        let view = makePlayerView(theme: makeTheme(startScreen: .posterAndPlayButton))
         let overlay = try XCTUnwrap(view.overlay)
-        overlay.setPlayButtonPressed(true)
+        view.stopLoader()
+        view.layoutIfNeeded()
+        let centerX = overlay.playButtonFrameInOverlay.midX
 
-        let circles = overlay.allSubviews {
-            $0.layer.cornerRadius == 28 && $0.alpha == 1 && ($0.backgroundColor?.cgColor.alpha ?? 0) > 0
-        }
-        XCTAssertEqual(circles.map(\.backgroundColor), [Constants.white8])
+        // Figma «Play button» Hovered 12403:87948: an 80-point circle in Surface/player/play_button/hover.
+        overlay.setPlayButtonPressed(true)
+        let circles = overlay.allSubviews { $0.layer.cornerRadius == 36 && $0.backgroundColor == Constants.accent }
+        let circle = try XCTUnwrap(circles.first)
+        XCTAssertEqual(circle.frame.width, 80, accuracy: 0.5)
+        XCTAssertEqual(overlay.convert(circle.center, from: circle.superview).x, centerX, accuracy: 0.5)
+
+        overlay.setPlayButtonPressed(false)
+        XCTAssertEqual(circle.frame.width, 72, accuracy: 0.5)
+        XCTAssertEqual(circle.backgroundColor, Constants.accent.withAlphaComponent(0.64))
     }
 
     func testMorphingGlyphIsScaledForTheChrome() throws {
@@ -173,7 +147,7 @@ final class KinescopePlayerFigmaPlayerTests: XCTestCase {
         view.didSelect(option: .settings)
         let card = try XCTUnwrap(view.subviews.compactMap { $0 as? SideMenu }.last)
 
-        // Figma «Settings/Normal» 20485:44516: 280 wide, 16 from the trailing edge, 44 from the bottom, 6 corners,
+        // Figma «Settings/Normal» 9494:114269: 280 wide, 16 from the trailing edge, 44 from the bottom, 6 corners,
         // three 36-point rows padded 8, no title row.
         XCTAssertEqual(card.frame.width, 280)
         XCTAssertEqual(card.frame.maxX, Constants.size.width - 16)
@@ -274,8 +248,8 @@ final class KinescopePlayerFigmaPlayerTests: XCTestCase {
 
     private func makeTheme(startScreen: KinescopePlayerTheme.StartScreen = .sdk) -> KinescopePlayerTheme {
         var colors = KinescopePlayerTheme.Colors.default
-        colors.controlBarBackground = Constants.black32
-        colors.optionPressedBackground = Constants.white8
+        colors.playButtonBackground = Constants.accent.withAlphaComponent(0.64)
+        colors.playButtonBackgroundPressed = Constants.accent
         colors.timelineThumbHalo = nil
         colors.iconPressed = Constants.pressed
         let glyphs: [KinescopePlayerIcon: String] = [
