@@ -16,6 +16,7 @@ final class PlayerOverlayView: UIControl {
     // MARK: - Properties
 
     private let playBackgroundCircle = UIView()
+    private let playPressedCircle = UIView()
     private let playPauseImageView = UIImageView()
     private let fastForwardImageView = UIImageView()
     private let fastBackwardImageView = UIImageView()
@@ -26,6 +27,8 @@ final class PlayerOverlayView: UIControl {
     private weak var delegate: PlayerOverlayViewDelegate?
     private var isPlaying = false
     private var isRewind = false
+    /// Only the play button, before playback starts (``KinescopePlayerTheme/StartScreen/posterAndPlayButton``).
+    private(set) var isStartScreen = false
     var duration: TimeInterval {
         return config.duration
     }
@@ -55,16 +58,24 @@ final class PlayerOverlayView: UIControl {
 
     override var isSelected: Bool {
         didSet {
+            guard !isStartScreen else {
+                return
+            }
             UIView.animate(withDuration: 0.1) {
                 self.contentView.alpha = self.isSelected ? 1.0 : .zero
             }
         }
     }
 
+    /// The play button is on screen: the chrome is shown or the start screen is.
+    private var isPlayButtonShown: Bool {
+        isSelected || isStartScreen
+    }
+
     // The play button's pressed state; taps themselves stay with the gesture recognizers.
 
     override func beginTracking(_ touch: UITouch, with event: UIEvent?) -> Bool {
-        setPlayButtonPressed(isSelected && playButtonFrame.contains(touch.location(in: contentView)))
+        setPlayButtonPressed(isPlayButtonShown && playButtonFrame.contains(touch.location(in: contentView)))
         return super.beginTracking(touch, with: event)
     }
 
@@ -88,11 +99,26 @@ final class PlayerOverlayView: UIControl {
     private(set) var isPlayButtonPressed = false
 
     func setPlayButtonPressed(_ pressed: Bool) {
-        guard let pressedColor = theme.colors.playButtonBackgroundPressed else {
+        let colors = theme.colors
+        guard colors.playButtonBackgroundPressed != nil || colors.playButtonPressedOverlay != nil else {
             return
         }
         isPlayButtonPressed = pressed
-        playBackgroundCircle.backgroundColor = pressed ? pressedColor : config.playBackgroundColor
+        let pressedBackground = colors.playButtonBackgroundPressed ?? config.playBackgroundColor
+        playBackgroundCircle.backgroundColor = pressed ? pressedBackground : config.playBackgroundColor
+        playPressedCircle.isHidden = !pressed || colors.playButtonPressedOverlay == nil
+    }
+
+    /// Shows only the play button over a clear background, whatever `isSelected` is, or brings the usual chrome
+    /// back (hidden until the next tap).
+    func setStartScreen(_ shown: Bool) {
+        guard isStartScreen != shown else {
+            return
+        }
+        isStartScreen = shown
+        contentView.backgroundColor = shown ? .clear : config.backgroundColor
+        nameView.isHidden = shown
+        contentView.alpha = isPlayButtonShown ? 1.0 : .zero
     }
 
     /// The circle and the glyph: a tap anywhere on them toggles playback.
@@ -141,15 +167,20 @@ private extension PlayerOverlayView {
     func configurePlayPauseImageView() {
         playBackgroundCircle.layer.cornerRadius = config.playBackgroundRadius
         playBackgroundCircle.backgroundColor = config.playBackgroundColor
+        playPressedCircle.layer.cornerRadius = config.playBackgroundRadius
+        playPressedCircle.backgroundColor = theme.colors.playButtonPressedOverlay
+        playPressedCircle.isHidden = true
         playPauseImageView.contentMode = .center
         if let tint = theme.colors.playButtonIcon {
             playPauseImageView.tintColor = tint
         }
         updatePlayPauseImage()
 
-        contentView.addSubviews(playBackgroundCircle, playPauseImageView)
+        contentView.addSubviews(playBackgroundCircle, playPressedCircle, playPauseImageView)
         playBackgroundCircle.squareSize(with: config.playBackgroundRadius * 2)
         contentView.centerChild(view: playBackgroundCircle)
+        playPressedCircle.squareSize(with: config.playBackgroundRadius * 2)
+        contentView.centerChild(view: playPressedCircle)
         let offset = theme.metrics.playButtonGlyphOffset
         playPauseImageView.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
@@ -228,8 +259,10 @@ private extension PlayerOverlayView {
     func singleTapAction(recognizer: UITapGestureRecognizer) {
         let location = recognizer.location(in: contentView)
 
-        if isSelected && playButtonFrame.contains(location) {
+        if isPlayButtonShown && playButtonFrame.contains(location) {
             playPauseAction()
+        } else if isStartScreen {
+            return
         } else {
             isRewind = false
             delegate?.didTap(isSelected: isSelected)
@@ -238,6 +271,9 @@ private extension PlayerOverlayView {
 
     @objc
     func doubleTapAction(recognizer: UITapGestureRecognizer) {
+        guard !isStartScreen else {
+            return
+        }
         isRewind = true
 
         let location = recognizer.location(in: self)

@@ -56,6 +56,8 @@ public class KinescopeVideoPlayer: KinescopePlayer, KinescopePlaybackControllabl
     private var isSeeking = false
     private var isPreparingSeek = false
     private var isPlaying = false
+    /// Playback has started at least once: a view attached later skips its start screen.
+    private var hasStartedPlayback = false
     private var isOverlayed = false
     private var savedTime: CMTime = .zero
     private weak var miniView: KinescopePlayerView?
@@ -190,6 +192,9 @@ public class KinescopeVideoPlayer: KinescopePlayer, KinescopePlaybackControllabl
         }
         view.set(options: options)
         view.pipController?.delegate = pipDelegate
+        if hasStartedPlayback {
+            view.skipStartScreen()
+        }
         syncChrome(of: view)
         updateTimeline()
         updateLiveIndicator()
@@ -455,6 +460,9 @@ private extension KinescopeVideoPlayer {
         let observerFactory = TimeControlStatusObserver(playerBody: self,
                                                         timeControlStatusChanged: { [weak self] status in
             self?.isPlaying = status == .playing
+            if status == .playing {
+                self?.hasStartedPlayback = true
+            }
         })
         kvoBag.addObserver(for: .playerTimeControlStatus, using: .init(wrappedFactory: observerFactory))
     }

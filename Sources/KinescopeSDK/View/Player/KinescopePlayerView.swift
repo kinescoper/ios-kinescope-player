@@ -40,6 +40,9 @@ public class KinescopePlayerView: UIView {
     weak var delegate: KinescopePlayerViewDelegate?
     /// Set by the full screen controller before the layout: the full screen option shows its exit icon.
     var isFullscreenHost = false
+    /// Playback has not started in this view yet and the theme asks for the start screen.
+    private(set) var isAwaitingFirstPlay = false
+    private var isWaitingOnStartScreen = false
     var canBeFullScreen: Bool {
         return controlPanel?.optionsMenu.options.contains(.fullscreen) ?? false
     }
@@ -77,11 +80,31 @@ public class KinescopePlayerView: UIView {
 
     func stopLoader(withPreview: Bool = true) {
         progressView.showVideoProgress(isLoading: false)
-        previewView.isHidden = withPreview
         overlay?.isHidden = false
+        guard !isAwaitingFirstPlay else {
+            // The start screen: the poster stays under the play button, or under the spinner of a started playback.
+            previewView.isHidden = false
+            overlay?.setStartScreen(true)
+            overlay?.isHidden = isWaitingOnStartScreen
+            progressView.showVideoProgress(isLoading: isWaitingOnStartScreen)
+            return
+        }
+        previewView.isHidden = withPreview
+    }
+
+    /// Drops the start screen for good: the view shows a player that has already played.
+    func skipStartScreen() {
+        guard isAwaitingFirstPlay else {
+            return
+        }
+        isAwaitingFirstPlay = false
+        overlay?.setStartScreen(false)
     }
 
     func change(timeControlStatus: AVPlayer.TimeControlStatus) {
+        if isAwaitingFirstPlay {
+            changeOnStartScreen(timeControlStatus: timeControlStatus)
+        }
         switch timeControlStatus {
         case .playing:
             controlPanel?.isHidden = false
@@ -100,6 +123,34 @@ public class KinescopePlayerView: UIView {
 
     func set(options: [KinescopePlayerOption]) {
         controlPanel?.set(options: options)
+    }
+
+    /// The start screen leaves when playback starts, the chrome showing until it hides by itself; while the
+    /// started playback waits for data only the spinner is over the poster.
+    private func changeOnStartScreen(timeControlStatus: AVPlayer.TimeControlStatus) {
+        switch timeControlStatus {
+        case .playing:
+            skipStartScreen()
+            previewView.isHidden = true
+            overlay?.isSelected = true
+            controlPanel?.showAnimated()
+            addDebouncerHandler()
+            overlayDebouncer.renewInterval()
+        case .waitingToPlayAtSpecifiedRate:
+            isWaitingOnStartScreen = true
+            overlay?.isHidden = true
+        case .paused:
+            // Back to the button only when the started playback gave up; a paused item that is still loading
+            // keeps its spinner.
+            guard isWaitingOnStartScreen else {
+                return
+            }
+            isWaitingOnStartScreen = false
+            progressView.showVideoProgress(isLoading: false)
+            overlay?.isHidden = false
+        @unknown default:
+            break
+        }
     }
     
     func bind(playingRateProvider: SideMenuItemsProvider,
@@ -130,6 +181,8 @@ public extension KinescopePlayerView {
     func setLayout(with config: KinescopePlayerViewConfiguration) {
 
         self.config = config
+        isAwaitingFirstPlay = config.theme.startScreen == .posterAndPlayButton
+        isWaitingOnStartScreen = false
 
         clearSubviews()
 
@@ -187,6 +240,16 @@ private extension KinescopePlayerView {
     }
 
     func configurePreviewView() {
+        // The poster is placed like the video.
+        switch config.gravity {
+        case .resizeAspectFill:
+            previewView.contentMode = .scaleAspectFill
+        case .resize:
+            previewView.contentMode = .scaleToFill
+        default:
+            previewView.contentMode = .scaleAspectFit
+        }
+        previewView.clipsToBounds = true
         addSubview(previewView)
         stretch(view: previewView)
     }

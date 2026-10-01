@@ -188,6 +188,57 @@ final class KinescopeVideoPlayerHLSIntegrationTests: XCTestCase {
         XCTAssertFalse(controlPanel.isHidden)
     }
 
+    func testStartScreenShowsOnlyThePlayButtonUntilPlaybackStarts() throws {
+        var theme = KinescopePlayerTheme.default
+        theme.startScreen = .posterAndPlayButton
+        let configuration = KinescopePlayerViewConfiguration.themed(theme)
+        let server = try makeServer(forbidSegments: false)
+        let player = makePlayer(server: server, configuration: configuration)
+        let inlineView = try XCTUnwrap(view)
+        let overlay = try XCTUnwrap(inlineView.overlay)
+        let controlPanel = try XCTUnwrap(inlineView.controlPanel)
+
+        let ready = expectation(description: "ready")
+        ready.assertForOverFulfill = false
+        delegate.onReady = { ready.fulfill() }
+        player.prepare()
+        wait(for: [ready], timeout: Constants.timeout)
+
+        XCTAssertEqual(player.strategy.player.timeControlStatus, .paused, "prepare() must not start playback")
+        XCTAssertTrue(overlay.isStartScreen)
+        XCTAssertFalse(overlay.isHidden)
+        XCTAssertFalse(overlay.isSelected)
+        XCTAssertFalse(inlineView.previewView.isHidden, "the poster stays under the play button")
+        XCTAssertTrue(controlPanel.isHidden, "no control bar before the start")
+
+        player.play()
+        let playing = expectation(for: NSPredicate { _, _ in player.strategy.player.timeControlStatus == .playing },
+                                  evaluatedWith: nil)
+        wait(for: [playing], timeout: Constants.timeout)
+
+        XCTAssertFalse(inlineView.isAwaitingFirstPlay)
+        XCTAssertFalse(overlay.isStartScreen)
+        XCTAssertTrue(overlay.isSelected, "the chrome shows once playback starts")
+        XCTAssertTrue(inlineView.previewView.isHidden)
+        XCTAssertFalse(controlPanel.isHidden)
+
+        // The full screen view of a player that has played has no start screen.
+        player.detach(view: inlineView)
+        let controller = KinescopeFullscreenViewController(
+            player: player,
+            config: .init(orientation: .landscapeRight, orientationMask: .landscape, backgroundColor: .black),
+            playerViewConfig: configuration
+        )
+        controller.loadViewIfNeeded()
+        controller.view.frame = CGRect(x: 0, y: 0, width: 844, height: 390)
+        controller.viewDidAppear(false)
+        let fullscreenView = try XCTUnwrap(controller.view.subviews.compactMap { $0 as? KinescopePlayerView }.first)
+        defer { player.detach(view: fullscreenView) }
+
+        XCTAssertFalse(fullscreenView.isAwaitingFirstPlay)
+        XCTAssertEqual(fullscreenView.overlay?.isStartScreen, false)
+    }
+
     // MARK: - Private
 
     private func makeServer(forbidSegments: Bool) throws -> LocalHTTPServer {
@@ -218,7 +269,8 @@ final class KinescopeVideoPlayerHLSIntegrationTests: XCTestCase {
         return server
     }
 
-    private func makePlayer(server: LocalHTTPServer) -> KinescopeVideoPlayer {
+    private func makePlayer(server: LocalHTTPServer,
+                            configuration: KinescopePlayerViewConfiguration = .default) -> KinescopeVideoPlayer {
         let dependencies = Dependencies()
         let hlsLink = server.baseURL.appendingPathComponent("master.m3u8").absoluteString
         dependencies.inspectorMock.videoSuccessMock[Constants.videoId] = .stub(id: Constants.videoId, hlsLink: hlsLink)
@@ -231,6 +283,7 @@ final class KinescopeVideoPlayerHLSIntegrationTests: XCTestCase {
         // A hostless test process keeps the player in `waitingToMinimizeStalls` even with the whole stream buffered.
         player.strategy.player.automaticallyWaitsToMinimizeStalling = false
         let view = KinescopePlayerView(frame: CGRect(x: 0, y: 0, width: 64, height: 64))
+        view.setLayout(with: configuration)
         player.setDelegate(delegate: delegate)
         player.attach(view: view)
         self.player = player

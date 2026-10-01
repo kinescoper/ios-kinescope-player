@@ -59,19 +59,37 @@ public struct KinescopePlayerTheme {
     public var colors: Colors
     public var fonts: Fonts
     public var metrics: Metrics
+    public var startScreen: StartScreen
 
     public init(icons: Icons = .default,
                 colors: Colors = .default,
                 fonts: Fonts = .default,
-                metrics: Metrics = .default) {
+                metrics: Metrics = .default,
+                startScreen: StartScreen = .sdk) {
         self.icons = icons
         self.colors = colors
         self.fonts = fonts
         self.metrics = metrics
+        self.startScreen = startScreen
     }
 
     /// The SDK's own look.
     public static let `default` = KinescopePlayerTheme()
+
+}
+
+// MARK: - Start screen
+
+public extension KinescopePlayerTheme {
+
+    /// What a prepared player shows before playback starts for the first time.
+    enum StartScreen: Hashable {
+        /// The SDK's own behavior: the poster goes away once the item is ready, the chrome shows on a tap.
+        case sdk
+        /// The poster and the play button only, no dimming, title or control bar; a tap outside the button does
+        /// nothing. The usual chrome takes over once playback starts.
+        case posterAndPlayButton
+    }
 
 }
 
@@ -139,6 +157,9 @@ public extension KinescopePlayerTheme {
         public var playButtonBackground: UIColor
         /// Background of the play/pause button while pressed. `nil`: no pressed state.
         public var playButtonBackgroundPressed: UIColor?
+        /// Laid over the play/pause button background while pressed, like a design system pressed layer.
+        /// `nil`: no layer. Combines with ``playButtonBackgroundPressed``.
+        public var playButtonPressedOverlay: UIColor?
         /// Tint of the play/pause glyph. `nil` draws the image as is.
         public var playButtonIcon: UIColor?
         /// Dimming of the video while the chrome is shown.
@@ -157,7 +178,8 @@ public extension KinescopePlayerTheme {
                     playButtonBackgroundPressed: UIColor?,
                     playButtonIcon: UIColor?,
                     overlayDim: UIColor,
-                    title: UIColor) {
+                    title: UIColor,
+                    playButtonPressedOverlay: UIColor? = nil) {
             self.icon = icon
             self.iconPressed = iconPressed
             self.text = text
@@ -167,6 +189,7 @@ public extension KinescopePlayerTheme {
             self.timelineThumb = timelineThumb
             self.playButtonBackground = playButtonBackground
             self.playButtonBackgroundPressed = playButtonBackgroundPressed
+            self.playButtonPressedOverlay = playButtonPressedOverlay
             self.playButtonIcon = playButtonIcon
             self.overlayDim = overlayDim
             self.title = title
@@ -322,10 +345,10 @@ public extension KinescopePlayerTheme {
             timeReservesHours: true
         )
 
-        /// Kinescope mobile app player (Figma Kinescope-App `136:19210` control bar, `1649:26934` play button):
-        /// bar 16 from the sides and 8 from the bottom, gap 12, 28-point options 12 apart, 72-point play button
-        /// with a 24-point glyph drawn at 36 and moved 2 to the right like the Figma `M / Play` instance, rounded
-        /// 4-point track without an idle thumb, time as wide as its text.
+        /// Kinescope mobile app player (Figma Kinescope-App `136:19210` control bar, `69:20042` play button):
+        /// bar 16 from the sides and 8 from the bottom, gap 12, 28-point options 12 apart, 64-point play button
+        /// with the 24-point glyph at its own size in the center like the video card, rounded 4-point track without
+        /// an idle thumb, time as wide as its text.
         public static let compact = Metrics(
             controlBarInsets: UIEdgeInsets(top: 0, left: 16, bottom: 8, right: 16),
             controlBarHeight: 28,
@@ -334,9 +357,9 @@ public extension KinescopePlayerTheme {
             optionSpacing: 12,
             collapsedOptionsCount: 2,
             iconGlyphScale: 28.0 / 24.0,
-            playButtonDiameter: 72,
-            playButtonGlyphScale: 1.5,
-            playButtonGlyphOffset: UIOffset(horizontal: 2, vertical: 0),
+            playButtonDiameter: 64,
+            playButtonGlyphScale: 1,
+            playButtonGlyphOffset: .zero,
             timelineHeight: 4,
             timelineCornerRadius: 2,
             timelineThumbRadius: 6,

@@ -5,6 +5,7 @@ final class KinescopePlayerThemeTests: XCTestCase {
 
     private enum Constants {
         static let pressed = UIColor(red: 0x61 / 255, green: 0x61 / 255, blue: 0xfc / 255, alpha: 1)
+        static let pressedOverlay = UIColor(white: 1, alpha: 0.16)
         static let size = CGSize(width: 375, height: 211)
         static let options: [KinescopePlayerOption] = [.subtitles, .airPlay, .settings, .pip, .fullscreen, .more]
     }
@@ -57,7 +58,7 @@ final class KinescopePlayerThemeTests: XCTestCase {
         XCTAssertEqual(panel.optionsMenu.iconSize, 28)
         XCTAssertEqual(panel.optionsMenu.highlightedColor, Constants.pressed)
         XCTAssertEqual(panel.timeline.circleRadius, 6)
-        XCTAssertEqual(overlay.playBackgroundRadius, 36)
+        XCTAssertEqual(overlay.playBackgroundRadius, 32)
         XCTAssertEqual(overlay.playImage.renderingMode, .alwaysTemplate)
     }
 
@@ -121,7 +122,7 @@ final class KinescopePlayerThemeTests: XCTestCase {
         let theme = makeTheme()
         let overlay = PlayerOverlayView(config: try XCTUnwrap(KinescopePlayerViewConfiguration.themed(theme).overlay),
                                         theme: theme)
-        let circle = try XCTUnwrap(overlay.firstSubview { $0.layer.cornerRadius == 36 })
+        let circle = try XCTUnwrap(overlay.firstSubview { $0.layer.cornerRadius == 32 })
 
         overlay.setPlayButtonPressed(true)
         XCTAssertEqual(circle.backgroundColor, theme.colors.playButtonBackgroundPressed)
@@ -129,7 +130,111 @@ final class KinescopePlayerThemeTests: XCTestCase {
         XCTAssertEqual(circle.backgroundColor, theme.colors.playButtonBackground)
     }
 
+    func testPlayButtonLaysThePressedOverlayOverItsBackground() throws {
+        var theme = makeTheme()
+        theme.colors.playButtonBackgroundPressed = nil
+        theme.colors.playButtonPressedOverlay = Constants.pressedOverlay
+        let overlay = PlayerOverlayView(config: try XCTUnwrap(KinescopePlayerViewConfiguration.themed(theme).overlay),
+                                        theme: theme)
+        let circles = overlay.allSubviews { $0.layer.cornerRadius == 32 }
+        XCTAssertEqual(circles.count, 2)
+        let background = try XCTUnwrap(circles.first)
+        let layer = try XCTUnwrap(circles.last)
+        XCTAssertEqual(layer.backgroundColor, Constants.pressedOverlay)
+        XCTAssertTrue(layer.isHidden)
+
+        overlay.setPlayButtonPressed(true)
+        XCTAssertFalse(layer.isHidden)
+        XCTAssertEqual(background.backgroundColor, theme.colors.playButtonBackground, "the fill stays under the layer")
+        overlay.setPlayButtonPressed(false)
+        XCTAssertTrue(layer.isHidden)
+    }
+
+    // MARK: - Start screen
+
+    func testDefaultThemeHasNoStartScreen() {
+        let view = makePlayerView(configuration: .default)
+
+        XCTAssertEqual(KinescopePlayerTheme.default.startScreen, .sdk)
+        XCTAssertFalse(view.isAwaitingFirstPlay)
+        view.stopLoader()
+        XCTAssertTrue(view.previewView.isHidden)
+        XCTAssertEqual(view.overlay?.isStartScreen, false)
+    }
+
+    func testStartScreenShowsThePosterAndThePlayButtonOnly() throws {
+        let view = makePlayerView(configuration: .themed(makeTheme(startScreen: .posterAndPlayButton)))
+        view.controlPanel?.isHidden = true
+        let overlay = try XCTUnwrap(view.overlay)
+
+        view.startLoader()
+        XCTAssertTrue(overlay.isHidden, "the spinner alone while the video loads")
+        view.stopLoader()
+
+        XCTAssertFalse(view.previewView.isHidden)
+        XCTAssertFalse(overlay.isHidden)
+        XCTAssertTrue(overlay.isStartScreen)
+        XCTAssertFalse(overlay.isSelected)
+        XCTAssertEqual(view.controlPanel?.isHidden, true)
+        let content = try XCTUnwrap(overlay.subviews.first)
+        XCTAssertEqual(content.alpha, 1)
+        XCTAssertEqual(content.backgroundColor, .clear, "no dimming")
+        XCTAssertTrue(overlay.allSubviews { $0 is VideoNameView }.allSatisfy(\.isHidden), "no title")
+        // The chrome's timer does not hide the button.
+        overlay.isSelected = false
+        XCTAssertEqual(content.alpha, 1)
+    }
+
+    func testStartScreenWaitsWithASpinnerAndLeavesOnPlay() throws {
+        let view = makePlayerView(configuration: .themed(makeTheme(startScreen: .posterAndPlayButton)))
+        view.controlPanel?.isHidden = true
+        let overlay = try XCTUnwrap(view.overlay)
+        view.stopLoader()
+
+        view.change(timeControlStatus: .waitingToPlayAtSpecifiedRate)
+        XCTAssertTrue(overlay.isHidden)
+        XCTAssertFalse(view.previewView.isHidden)
+        // The item becomes ready while the started playback waits: still no button.
+        view.stopLoader()
+        XCTAssertTrue(overlay.isHidden)
+        // The playback gave up: the button is back.
+        view.change(timeControlStatus: .paused)
+        XCTAssertFalse(overlay.isHidden)
+        XCTAssertTrue(overlay.isStartScreen)
+
+        view.change(timeControlStatus: .playing)
+        XCTAssertFalse(view.isAwaitingFirstPlay)
+        XCTAssertFalse(overlay.isStartScreen)
+        XCTAssertTrue(overlay.isSelected)
+        XCTAssertTrue(view.previewView.isHidden)
+        XCTAssertEqual(view.controlPanel?.isHidden, false)
+        XCTAssertEqual(overlay.subviews.first?.backgroundColor, KinescopePlayerTheme.Colors.default.overlayDim)
+
+        // Pausing later is the usual chrome, not the start screen.
+        view.change(timeControlStatus: .paused)
+        XCTAssertFalse(overlay.isStartScreen)
+    }
+
+    func testPosterIsPlacedLikeTheVideo() {
+        let fit = makePlayerView(configuration: .default)
+        let fill = makePlayerView(configuration: KinescopePlayerViewConfigurationBuilder(configuration: .default)
+            .setGravity(.resizeAspectFill)
+            .build())
+
+        XCTAssertEqual(fit.previewView.contentMode, .scaleAspectFit)
+        XCTAssertEqual(fill.previewView.contentMode, .scaleAspectFill)
+    }
+
     // MARK: - Geometry
+
+    func testCompactPlayButtonMatchesTheVideoCard() {
+        let metrics = KinescopePlayerTheme.Metrics.compact
+
+        // Figma 69:20042 and the app's AppPlayButton: a 64-point circle, the 24-point glyph at its size, centered.
+        XCTAssertEqual(metrics.playButtonDiameter, 64)
+        XCTAssertEqual(metrics.playButtonGlyphScale, 1)
+        XCTAssertEqual(metrics.playButtonGlyphOffset, .zero)
+    }
 
     func testCompactControlBarFollowsFigma() throws {
         let view = makePlayerView(configuration: .themed(makeTheme()))
@@ -192,7 +297,7 @@ final class KinescopePlayerThemeTests: XCTestCase {
 
     // MARK: - Private
 
-    private func makeTheme() -> KinescopePlayerTheme {
+    private func makeTheme(startScreen: KinescopePlayerTheme.StartScreen = .sdk) -> KinescopePlayerTheme {
         var colors = KinescopePlayerTheme.Colors.default
         colors.iconPressed = Constants.pressed
         colors.playButtonBackground = Constants.pressed.withAlphaComponent(0.64)
@@ -200,7 +305,8 @@ final class KinescopePlayerThemeTests: XCTestCase {
         return KinescopePlayerTheme(
             icons: .init { icon in icon == .play ? UIImage(systemName: "play.fill") : nil },
             colors: colors,
-            metrics: .compact
+            metrics: .compact,
+            startScreen: startScreen
         )
     }
 
@@ -218,6 +324,12 @@ final class KinescopePlayerThemeTests: XCTestCase {
 }
 
 private extension UIView {
+
+    func allSubviews(where predicate: (UIView) -> Bool) -> [UIView] {
+        subviews.flatMap { subview in
+            (predicate(subview) ? [subview] : []) + subview.allSubviews(where: predicate)
+        }
+    }
 
     func firstSubview(where predicate: (UIView) -> Bool) -> UIView? {
         for subview in subviews {

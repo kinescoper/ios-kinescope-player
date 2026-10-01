@@ -41,15 +41,18 @@ let theme = KinescopePlayerTheme(
     },
     colors: colors,           // KinescopePlayerTheme.Colors: icons and their pressed color, timeline, play button
     fonts: .default,          // time, title over the video, side menu
-    metrics: .compact         // control bar insets and gaps, option and play button sizes, timeline
+    metrics: .compact,        // control bar insets and gaps, option and play button sizes, timeline
+    startScreen: .posterAndPlayButton // before the first play: the poster and the play button only
 )
 playerView.setLayout(with: .themed(theme))
 ```
 
 - `KinescopePlayerViewConfiguration.themed(_:)` fills the nested configurations (overlay, control panel, side menu) from the theme. To keep hand-made nested configurations and only add what they do not cover (icons, pressed states, insets and gaps), use `.builder().setTheme(theme)`.
 - Supplied icons are drawn as templates tinted with `colors.icon`, centered at their own size times `metrics.iconGlyphScale`, so glyphs cut to their path (like design system icons) are not stretched. `.exitFullscreen` is shown in place of `.fullscreen` inside the full screen player.
-- A pressed option changes its color to `colors.iconPressed`; the play button changes its background to `colors.playButtonBackgroundPressed`. `nil` keeps the system dimming and no pressed background.
-- `Metrics.compact` is the Kinescope mobile app geometry: bar 16 from the sides and 8 from the bottom, gap 12, 28-point options 12 apart, 72-point play button, rounded track without an idle thumb, time as wide as its text.
+- A pressed option changes its color to `colors.iconPressed`; the play button changes its background to `colors.playButtonBackgroundPressed` and lays `colors.playButtonPressedOverlay` over it. `nil` keeps the system dimming and no pressed background or layer.
+- `Metrics.compact` is the Kinescope mobile app geometry: bar 16 from the sides and 8 from the bottom, gap 12, 28-point options 12 apart, 64-point play button with the glyph at its own size, rounded track without an idle thumb, time as wide as its text.
+- `startScreen: .posterAndPlayButton`: a prepared player (`prepare()`, no autoplay) shows only the poster and the play button, with no dimming, title or control bar; taps outside the button do nothing. Once playback starts, the usual chrome takes over (it shows, then hides by itself). A view attached to a player that has already played (the full screen one) skips it. `.sdk` (the default) keeps the SDK behavior.
+- The poster is placed like the video: `scaleAspectFit` for `.resizeAspect` (the default gravity), `scaleAspectFill` for `.resizeAspectFill`.
 
 ## Managing of options menu
 
