@@ -9,11 +9,11 @@ Pod::Spec.new do |s|
 
   s.source_files = 'Sources/KinescopeSDK/**/*.swift'
   s.framework = 'UIKit'
-  s.ios.deployment_target = '10.0'
+  s.ios.deployment_target = '17.0'
   s.swift_version = '5.0'
 
-  s.dependency 'SwiftProtobuf', '1.26.0'
-  s.dependency 'M3U8Kit', '~> 1.0'
+  s.dependency 'SwiftProtobuf', '1.38.1'
+  s.dependency 'M3U8Kit', '1.2.0'
 
   s.resource_bundles = { 'KinescopeSDK' => ['Sources/KinescopeSDK/Resources/*.xcassets', 'Sources/KinescopeSDK/Resources/*.lproj/*.strings'] }
 end

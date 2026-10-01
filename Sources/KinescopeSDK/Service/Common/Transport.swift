@@ -26,42 +26,9 @@ final class Transport {
     ///}
     ///```
     func perform<D: Codable, M: Codable>(request: URLRequest, completion: @escaping (Result<MetaResponse<D, M>, Error>) -> Void) {
-        session.dataTask(with: request) { [weak self] data, response, error in
-            if let error = error {
-                self?.completionQueue.async {
-                    completion(.failure(error))
-                }
-            } else if let httpResponse = response as? HTTPURLResponse,
-               (200..<300).contains(httpResponse.statusCode),
-               let responseData = data {
-
-                do {
-                    let decoder = JSONDecoder.default()
-                    let response = try decoder.decode(MetaResponse<D, M>.self, from: responseData)
-
-                    self?.completionQueue.async {
-                        completion(.success(response))
-                    }
-                } catch let error {
-                    Kinescope.shared.logger?.log(error: error, level: KinescopeLoggerLevel.network)
-                    self?.completionQueue.async {
-                        completion(.failure(error))
-                    }
-                }
-            } else if let responseData = data {
-                do {
-                    let error = try JSONDecoder.default().decode(ServerErrorWrapper.self, from: responseData)
-
-                    self?.completionQueue.async {
-                        completion(.failure(error.error))
-                    }
-                } catch let error {
-                    self?.completionQueue.async {
-                        completion(.failure(error))
-                    }
-                }
-            }
-        }.resume()
+        execute(request: request, completion: completion) { data in
+            try JSONDecoder.default().decode(MetaResponse<D, M>.self, from: data)
+        }
     }
 
     /// Perform request with simple response
@@ -73,67 +40,14 @@ final class Transport {
     ///}
     ///```
     func perform<D: Codable>(request: URLRequest, completion: @escaping (Result<D, Error>) -> Void) {
-        session.dataTask(with: request) { [weak self] data, response, error in
-            if let error = error {
-                self?.completionQueue.async {
-                    completion(.failure(error))
-                }
-            } else if let httpResponse = response as? HTTPURLResponse,
-               (200..<300).contains(httpResponse.statusCode),
-               let responseData = data {
-
-                do {
-                    let decoder = JSONDecoder.default()
-                    let response = try decoder.decode(Response<D>.self, from: responseData)
-
-                    self?.completionQueue.async {
-                        completion(.success(response.data))
-                    }
-                } catch let error {
-                    self?.completionQueue.async {
-                        completion(.failure(error))
-                    }
-                }
-            } else if let responseData = data {
-                do {
-                    let error = try JSONDecoder.default().decode(ServerErrorWrapper.self, from: responseData)
-
-                    self?.completionQueue.async {
-                        completion(.failure(error.error))
-                    }
-                } catch let error {
-                    self?.completionQueue.async {
-                        completion(.failure(error))
-                    }
-                }
-            }
-        }.resume()
+        execute(request: request, completion: completion) { data in
+            try JSONDecoder.default().decode(Response<D>.self, from: data).data
+        }
     }
-    
+
     /// Perform request with raw data response
     func performRaw(request: URLRequest, completion: @escaping (Result<Data, Error>) -> Void) {
-        session.dataTask(with: request) { [weak self] data, response, error in
-            if let error = error {
-                self?.completionQueue.async {
-                    completion(.failure(error))
-                }
-            } else if let httpResponse = response as? HTTPURLResponse,
-               (200..<300).contains(httpResponse.statusCode),
-               let responseData = data {
-
-                do {
-                    let decoder = JSONDecoder.default()
-
-                    self?.completionQueue.async {
-                        completion(.success(responseData))
-                    }
-                } catch let error {
-                    self?.completionQueue.async {
-                        completion(.failure(error))
-                    }
-                }
-            }
-        }.resume()
+        execute(request: request, completion: completion) { $0 }
     }
 
     /// Perform fetch request with json response
@@ -145,41 +59,57 @@ final class Transport {
     ///}
     ///```
     func performFetch<D: Codable>(request: URLRequest, completion: @escaping (Result<D, Error>) -> Void) {
-        session.dataTask(with: request) { [weak self] data, response, error in
-            if let error = error {
-                self?.completionQueue.async {
-                    completion(.failure(error))
-                }
-            } else if let httpResponse = response as? HTTPURLResponse,
-               (200..<300).contains(httpResponse.statusCode),
-               let responseData = data {
+        execute(request: request, completion: completion) { data in
+            try JSONDecoder.default().decode(D.self, from: data)
+        }
+    }
 
-                do {
-                    let decoder = JSONDecoder.default()
-                    let response = try decoder.decode(D.self, from: responseData)
+}
 
-                    self?.completionQueue.async {
-                        completion(.success(response))
-                    }
-                } catch let error {
-                    self?.completionQueue.async {
-                        completion(.failure(error))
-                    }
-                }
-            } else if let responseData = data {
-                do {
-                    let error = try JSONDecoder.default().decode(ServerErrorWrapper.self, from: responseData)
+// MARK: - Private Methods
 
-                    self?.completionQueue.async {
-                        completion(.failure(error.error))
-                    }
-                } catch let error {
-                    self?.completionQueue.async {
-                        completion(.failure(error))
-                    }
-                }
+private extension Transport {
+
+    /// Every response ends in exactly one completion call: a transport error, a `KinescopeHTTPError`
+    /// for any non-2xx status (with or without a body), a decoding error or the decoded value.
+    func execute<T>(request: URLRequest,
+                    completion: @escaping (Result<T, Error>) -> Void,
+                    decode: @escaping (Data) throws -> T) {
+        let completionQueue = self.completionQueue
+        session.dataTask(with: request) { data, response, error in
+            let result = Transport.makeResult(request: request,
+                                              data: data,
+                                              response: response,
+                                              error: error,
+                                              decode: decode)
+            if case .failure(let error) = result {
+                Kinescope.shared.logger?.log(error: error, level: KinescopeLoggerLevel.network)
+            }
+            completionQueue.async {
+                completion(result)
             }
         }.resume()
+    }
+
+    static func makeResult<T>(request: URLRequest,
+                              data: Data?,
+                              response: URLResponse?,
+                              error: Error?,
+                              decode: (Data) throws -> T) -> Result<T, Error> {
+        if let error {
+            return .failure(error)
+        }
+        guard let httpResponse = response as? HTTPURLResponse else {
+            return .failure(URLError(.badServerResponse))
+        }
+        guard (200..<300).contains(httpResponse.statusCode) else {
+            let serverError = data.flatMap { try? JSONDecoder.default().decode(ServerErrorWrapper.self, from: $0) }?.error
+            return .failure(KinescopeHTTPError(statusCode: httpResponse.statusCode,
+                                               url: httpResponse.url ?? request.url,
+                                               message: serverError?.message,
+                                               detail: serverError?.detail))
+        }
+        return Result { try decode(data ?? Data()) }
     }
 
 }

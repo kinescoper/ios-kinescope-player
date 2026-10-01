@@ -98,7 +98,7 @@ extension KinescopeFullscreenViewController {
                         video: KinescopeVideo,
                         with playerViewConfig: KinescopePlayerViewConfiguration,
                         and completion: @escaping () -> Void) {
-        KinescopeFullscreenConfiguration.preferred(for: video) { configuration in
+        KinescopeFullscreenConfiguration.preferred(for: video, referer: player.config.effectiveReferer) { configuration in
             let playerVC = KinescopeFullscreenViewController(player: player,
                                                              config: configuration, 
                                                              playerViewConfig: playerViewConfig)

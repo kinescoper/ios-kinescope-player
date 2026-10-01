@@ -18,3 +18,23 @@ public enum KinescopeInspectError: Error {
     case unknown(Error)
 
 }
+
+public extension KinescopeInspectError {
+
+    /// HTTP status code behind the error, if the failure was a non-2xx response.
+    ///
+    /// Added in 0.3.0-kinescoper.1.
+    var httpStatusCode: Int? {
+        switch self {
+        case .notFound:
+            return 404
+        case .denied:
+            return 403
+        case .network:
+            return nil
+        case .unknown(let error):
+            return (error as? KinescopeHTTPError)?.statusCode
+        }
+    }
+
+}

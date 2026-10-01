@@ -2,6 +2,7 @@ import Foundation
 
 protocol VideosService {
     func getVideo(by id: String,
+                  referer: String?,
                   completion: @escaping (Result<KinescopeVideo, Error>) -> Void)
 }
 
@@ -24,9 +25,9 @@ final class VideosNetworkService: VideosService {
 
     // MARK: - Public Methods
 
-    func getVideo(by id: String, completion: @escaping (Result<KinescopeVideo, Error>) -> Void) {
+    func getVideo(by id: String, referer: String?, completion: @escaping (Result<KinescopeVideo, Error>) -> Void) {
         executionQueue.async { [weak self] in
-            self?.getVideoFromJson(by: id, completion: completion)
+            self?.getVideoFromJson(by: id, referer: referer, completion: completion)
         }
     }
 }
@@ -35,10 +36,10 @@ final class VideosNetworkService: VideosService {
 
 private extension VideosNetworkService {
 
-    func getVideoFromJson(by id: String, completion: @escaping (Result<KinescopeVideo, Error>) -> Void) {
+    func getVideoFromJson(by id: String, referer: String?, completion: @escaping (Result<KinescopeVideo, Error>) -> Void) {
         do {
             let request = try RequestBuilder(path: "\(config.endpoint)\(id).json", method: .get)
-                .add(referer: config.referer)
+                .add(referer: referer ?? config.referer)
                 .add(parameters: ["sdk": "ios"])
                 .build(body: EmptyRequest())
 

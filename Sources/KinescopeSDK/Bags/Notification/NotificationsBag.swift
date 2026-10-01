@@ -9,14 +9,16 @@ import Foundation
 
 final class NotificationsBag: GenericBag<NotificationSubKey, SelectorBasedObserverFactory> {
     
-    private let observer: Any
+    // Weak: the player owns this bag, a strong reference made every player leak.
+    // Selector-based observers are unregistered by NotificationCenter on deallocation.
+    private weak var observer: AnyObject?
 
-    init(observer: Any) {
+    init(observer: AnyObject) {
         self.observer = observer
     }
 
     override func addObserver(for key: NotificationSubKey, using factory: SelectorBasedObserverFactory) {
-        guard let selector = factory.provide() else {
+        guard let observer, let selector = factory.provide() else {
             return
         }
         NotificationCenter.default.addObserver(observer,
@@ -27,7 +29,9 @@ final class NotificationsBag: GenericBag<NotificationSubKey, SelectorBasedObserv
 
     override func removeAll() {
         super.removeAll()
-        NotificationCenter.default.removeObserver(observer)
+        if let observer {
+            NotificationCenter.default.removeObserver(observer)
+        }
     }
 
 }

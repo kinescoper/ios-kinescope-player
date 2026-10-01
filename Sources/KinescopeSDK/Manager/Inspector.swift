@@ -22,9 +22,10 @@ class Inspector: KinescopeInspectable {
     // MARK: - Methods
 
     func video(id: String,
+               referer: String?,
                onSuccess: @escaping (KinescopeVideo) -> Void,
                onError: @escaping (KinescopeInspectError) -> Void) {
-        videosService.getVideo(by: id) { result in
+        videosService.getVideo(by: id, referer: referer) { result in
             switch result {
             case .success(let response):
                 onSuccess(response)
@@ -40,19 +41,17 @@ class Inspector: KinescopeInspectable {
 private extension Inspector {
 
     static func parse(error: Error) -> KinescopeInspectError {
-        guard let serverError = error as? ServerError else {
+        guard let httpError = error as? KinescopeHTTPError else {
             return .unknown(error)
         }
 
-        switch serverError.code {
+        switch httpError.statusCode {
         case 404:
             return .notFound
         case 403:
             return .denied
-        case ..<0:
-            return .network
         default:
-            return .unknown(error)
+            return .unknown(httpError)
         }
     }
 
