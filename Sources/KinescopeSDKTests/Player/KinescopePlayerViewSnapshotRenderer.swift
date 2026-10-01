@@ -97,6 +97,31 @@ final class KinescopePlayerViewSnapshotRenderer: XCTestCase {
         RunLoop.main.run(until: Date().addingTimeInterval(0.5))
         view.showOverlay(true)
         try save(view, to: directory.appendingPathComponent("hls-themed-375-2-playing.png"))
+
+        // Full screen in landscape, as `didPresentFullscreen` does it: the controller attaches its own view.
+        player.play()
+        wait(for: [expectation(for: NSPredicate { _, _ in player.strategy.player.timeControlStatus == .playing },
+                               evaluatedWith: nil)],
+             timeout: 30)
+        player.detach(view: view)
+        let controller = KinescopeFullscreenViewController(
+            player: player,
+            config: .init(orientation: .landscapeRight, orientationMask: .landscape, backgroundColor: .black),
+            playerViewConfig: .themed(Self.appLikeTheme)
+        )
+        let landscape = CGRect(x: 0, y: 0, width: 844, height: 390)
+        let window = UIWindow(frame: landscape)
+        window.rootViewController = controller
+        window.isHidden = false
+        self.window = window
+        controller.view.frame = landscape
+        controller.viewDidAppear(false)
+        let fullscreenView = try XCTUnwrap(controller.view.subviews.compactMap { $0 as? KinescopePlayerView }.first)
+        defer { player.detach(view: fullscreenView) }
+        player.pause()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.3))
+        fullscreenView.showOverlay(true)
+        try save(controller.view, to: directory.appendingPathComponent("hls-themed-fullscreen-landscape.png"))
     }
 
     private struct HLSDependencies: KinescopePlayerDependencies {

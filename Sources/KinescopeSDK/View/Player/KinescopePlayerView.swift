@@ -205,7 +205,7 @@ private extension KinescopePlayerView {
     func configureControlPanel(with config: KinescopeControlPanelConfiguration) {
         let controlPanel = PlayerControlView(config: config, theme: self.config.theme, isFullscreen: isFullscreenHost)
         addSubview(controlPanel)
-        bottomChildWithSafeArea(view: controlPanel)
+        bottomChildInsideSafeArea(view: controlPanel)
         controlPanel.isHidden = true
 
         self.controlPanel = controlPanel

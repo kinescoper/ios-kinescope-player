@@ -140,6 +140,54 @@ final class KinescopeVideoPlayerHLSIntegrationTests: XCTestCase {
         XCTAssertTrue(delegate.errorLogEntries.contains { $0.httpStatusCode == 403 })
     }
 
+    /// The owner's P0: in full screen the play/pause button was missing and, once the control bar hid, a tap did not
+    /// bring it back. The full screen view is attached to a player that is already playing, and its overlay (the
+    /// play/pause button and the tap target) stayed hidden because no status change came to unhide it.
+    func testFullscreenViewOfAPlayingPlayerShowsControlsAndTakesTaps() throws {
+        let server = try makeServer(forbidSegments: false)
+        let player = makePlayer(server: server)
+        let inlineView = try XCTUnwrap(view)
+
+        let ready = expectation(description: "ready")
+        ready.assertForOverFulfill = false
+        delegate.onReady = { ready.fulfill() }
+        player.prepare()
+        wait(for: [ready], timeout: Constants.timeout)
+        player.play()
+        let playing = expectation(for: NSPredicate { _, _ in player.strategy.player.timeControlStatus == .playing },
+                                  evaluatedWith: nil)
+        wait(for: [playing], timeout: Constants.timeout)
+
+        // What `didPresentFullscreen` does: the inline view is detached, the controller attaches its own view.
+        player.detach(view: inlineView)
+        let controller = KinescopeFullscreenViewController(
+            player: player,
+            config: .init(orientation: .landscapeRight, orientationMask: .landscape, backgroundColor: .black),
+            playerViewConfig: .default
+        )
+        controller.loadViewIfNeeded()
+        controller.view.frame = CGRect(x: 0, y: 0, width: 844, height: 390)
+        controller.viewDidAppear(false)
+        let fullscreenView = try XCTUnwrap(controller.view.subviews.compactMap { $0 as? KinescopePlayerView }.first)
+        defer { player.detach(view: fullscreenView) }
+        let overlay = try XCTUnwrap(fullscreenView.overlay)
+        let controlPanel = try XCTUnwrap(fullscreenView.controlPanel)
+
+        XCTAssertFalse(overlay.isHidden, "no play/pause button and no tap target")
+        XCTAssertFalse(controlPanel.isHidden)
+        XCTAssertTrue(controlPanel.optionsMenu.options.contains(.fullscreen), "no way out of full screen")
+
+        // A tap hides the chrome, the next one brings it back.
+        fullscreenView.showOverlay(true)
+        XCTAssertTrue(overlay.isSelected)
+        fullscreenView.showOverlay(false)
+        XCTAssertFalse(overlay.isSelected)
+        XCTAssertFalse(overlay.isHidden, "a hidden overlay takes no taps")
+        fullscreenView.showOverlay(true)
+        XCTAssertTrue(overlay.isSelected)
+        XCTAssertFalse(controlPanel.isHidden)
+    }
+
     // MARK: - Private
 
     private func makeServer(forbidSegments: Bool) throws -> LocalHTTPServer {

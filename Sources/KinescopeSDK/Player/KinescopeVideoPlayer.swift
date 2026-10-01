@@ -190,6 +190,7 @@ public class KinescopeVideoPlayer: KinescopePlayer, KinescopePlaybackControllabl
         }
         view.set(options: options)
         view.pipController?.delegate = pipDelegate
+        syncChrome(of: view)
         updateTimeline()
         updateLiveIndicator()
         observePlaybackTime()
@@ -604,6 +605,20 @@ private extension KinescopeVideoPlayer {
                                                                willRetry: willRetry))
     }
 
+    /// Brings a freshly attached view to the player's state. The full screen view is attached to a player that is
+    /// already loaded and maybe playing, so no status change comes to unhide its overlay: without it there is no
+    /// play/pause button and no tap target to bring the control bar back after it hides.
+    func syncChrome(of view: KinescopePlayerView) {
+        if let video {
+            view.overlay?.set(title: video.title, subtitle: video.description)
+        }
+        guard strategy.player.isReadyToPlay else {
+            return
+        }
+        view.stopLoader()
+        view.change(timeControlStatus: strategy.player.timeControlStatus)
+    }
+
     func restoreView() {
         view?.showOverlay(isOverlayed)
         isPlaying ? play() : pause()
@@ -750,8 +765,7 @@ extension KinescopeVideoPlayer: KinescopePlayerViewDelegate {
                     return
                 }
 
-                view.overlay?.set(title: video.title, subtitle: video.description)
-                view.stopLoader(withPreview: strategy.player.isReadyToPlay)
+                // `view` is the inline view here; the full screen one is attached and synced by now.
                 restoreView()
             }
         }
