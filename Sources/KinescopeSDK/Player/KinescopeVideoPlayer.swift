@@ -712,6 +712,9 @@ extension KinescopeVideoPlayer: KinescopePlayerViewDelegate {
         performSeek(to: time)
     }
 
+    /// A double tap on a side of the video seeks this far.
+    static let fastSeekInterval: TimeInterval = 15
+
     func didFastForward() {
         guard let duration = strategy.player.durationSeconds else {
             return
@@ -719,7 +722,7 @@ extension KinescopeVideoPlayer: KinescopePlayerViewDelegate {
 
         Kinescope.shared.logger?.log(message: "fast forward +15s", level: KinescopeLoggerLevel.player)
 
-        time = min(duration, time + 15)
+        time = min(duration, time + Self.fastSeekInterval)
         analytic?.send(event: .seek)
         performSeek(to: time)
 
@@ -729,7 +732,7 @@ extension KinescopeVideoPlayer: KinescopePlayerViewDelegate {
     func didFastBackward() {
         Kinescope.shared.logger?.log(message: "fast backward -15s", level: KinescopeLoggerLevel.player)
 
-        time = max(time - 15.0, .zero)
+        time = max(time - Self.fastSeekInterval, .zero)
         analytic?.send(event: .seek)
         performSeek(to: time)
 

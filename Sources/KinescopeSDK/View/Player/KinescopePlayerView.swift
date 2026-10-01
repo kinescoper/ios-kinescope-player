@@ -444,6 +444,10 @@ private extension KinescopePlayerView {
     }
 
     func presentSideMenu(model: SideMenu.Model) {
+        if config.theme.menu.isCard {
+            // A nested card takes the place of its parent, which comes back on the way back.
+            subviews.compactMap { $0 as? SideMenu }.forEach { $0.isHidden = true }
+        }
         let sideMenu = SideMenu(config: config.sideMenu, model: model, theme: config.theme)
         sideMenu.delegate = self
         sideMenuCoordinator.present(view: sideMenu, in: self, animated: true)
@@ -614,6 +618,7 @@ extension KinescopePlayerView: SideMenuDelegate {
             }
         } else {
             sideMenuCoordinator.dismiss(view: sideMenu, from: self, animated: true)
+            subviews.compactMap { $0 as? SideMenu }.last { $0 !== sideMenu }?.isHidden = false
         }
     }
 

@@ -51,3 +51,4 @@
 "Player.fastBackward" = "Skip back";
 "Player.back" = "Back";
 "Player.close" = "Close";
+"Player.seekSeconds" = "%d sec";

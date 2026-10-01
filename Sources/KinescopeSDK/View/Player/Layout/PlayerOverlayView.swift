@@ -25,6 +25,9 @@ final class PlayerOverlayView: UIControl {
     private(set) lazy var playButtonElement = PlayButtonAccessibilityElement(overlay: self)
     private let fastForwardImageView = UIImageView()
     private let fastBackwardImageView = UIImageView()
+    /// ``KinescopePlayerTheme/SeekFeedback/Style/sideArea`` in place of the growing glyphs.
+    private(set) var seekForwardArea: SeekFeedbackView?
+    private(set) var seekBackwardArea: SeekFeedbackView?
     private let nameView: VideoNameView
     private let contentView = UIView()
     private let config: KinescopePlayerOverlayConfiguration
@@ -34,6 +37,8 @@ final class PlayerOverlayView: UIControl {
     private var isRewind = false
     /// Only the play button, before playback starts (``KinescopePlayerTheme/StartScreen/posterAndPlayButton``).
     private(set) var isStartScreen = false
+    private var circleSizeConstraints: [NSLayoutConstraint] = []
+    private var glyphCenterConstraints: [NSLayoutConstraint] = []
     var duration: TimeInterval {
         return config.duration
     }
@@ -107,15 +112,24 @@ final class PlayerOverlayView: UIControl {
     /// quick tap is seen too.
     func setPlayButtonPressed(_ pressed: Bool) {
         let colors = theme.colors
-        guard colors.playButtonBackgroundPressed != nil || colors.playButtonPressedOverlay != nil else {
+        let style = playButtonStyle
+        let isGlyphOnly = style.isGlyphOnly
+        guard isGlyphOnly
+            ? colors.iconPressed != nil
+            : colors.playButtonBackgroundPressed != nil || colors.playButtonPressedOverlay != nil else {
             return
         }
         let wasPressed = isPlayButtonPressed
         isPlayButtonPressed = pressed
-        let pressedBackground = colors.playButtonBackgroundPressed ?? config.playBackgroundColor
+        let pressedBackground = colors.playButtonBackgroundPressed ?? style.background
         let changes = {
-            self.playBackgroundCircle.backgroundColor = pressed ? pressedBackground : self.config.playBackgroundColor
-            self.playPressedCircle.alpha = pressed && colors.playButtonPressedOverlay != nil ? 1 : 0
+            if isGlyphOnly {
+                // A glyph without a fill changes its colour.
+                self.setPlayGlyphTint(pressed ? colors.iconPressed : nil)
+            } else {
+                self.playBackgroundCircle.backgroundColor = pressed ? pressedBackground : style.background
+                self.playPressedCircle.alpha = pressed && colors.playButtonPressedOverlay != nil ? 1 : 0
+            }
         }
         let duration = theme.playPauseAnimation.duration
         if wasPressed && !pressed && duration > 0 && window != nil {
@@ -153,6 +167,7 @@ final class PlayerOverlayView: UIControl {
         contentView.backgroundColor = shown ? .clear : config.backgroundColor
         nameView.isHidden = shown
         contentView.alpha = isPlayButtonShown ? 1.0 : .zero
+        applyPlayButtonStyle()
         playButtonElement.update(isPlaying: isPlaying)
     }
 
@@ -166,6 +181,41 @@ final class PlayerOverlayView: UIControl {
     private var playButtonFrame: CGRect {
         playBackgroundCircle.frame.union(playPauseImageView.frame)
     }
+}
+
+// MARK: - Play button style
+
+extension PlayerOverlayView {
+
+    /// The play button as drawn now: the start screen's, or ``KinescopePlayerTheme/chromePlayButton`` with the chrome.
+    struct PlayButtonStyle {
+        let diameter: CGFloat
+        let background: UIColor
+        let glyphScale: CGFloat
+        let glyphOffset: UIOffset
+
+        var isGlyphOnly: Bool {
+            background.cgColor.alpha == 0
+        }
+    }
+
+    var startPlayButtonStyle: PlayButtonStyle {
+        PlayButtonStyle(diameter: config.playBackgroundRadius * 2,
+                        background: config.playBackgroundColor,
+                        glyphScale: theme.metrics.playButtonGlyphScale,
+                        glyphOffset: theme.metrics.playButtonGlyphOffset)
+    }
+
+    var playButtonStyle: PlayButtonStyle {
+        guard !isStartScreen, let chrome = theme.chromePlayButton else {
+            return startPlayButtonStyle
+        }
+        return PlayButtonStyle(diameter: chrome.diameter,
+                               background: chrome.background,
+                               glyphScale: chrome.glyphScale,
+                               glyphOffset: chrome.glyphOffset)
+    }
+
 }
 
 // MARK: - PlayerOverlayInput
@@ -203,12 +253,35 @@ private extension PlayerOverlayView {
         configurePlayPauseImageView()
         configureFastForwardImageView()
         configureFastBackwardImageView()
+        configureSeekAreas()
+    }
+
+    func configureSeekAreas() {
+        let feedback = theme.seekFeedback
+        guard case let .sideArea(fill, widthRatio, edgeDepth) = feedback.style else {
+            return
+        }
+        let seconds = Int(KinescopeVideoPlayer.fastSeekInterval)
+        let backward = SeekFeedbackView(side: .backward, feedback: feedback, fill: fill, edgeDepth: edgeDepth,
+                                        seconds: seconds)
+        let forward = SeekFeedbackView(side: .forward, feedback: feedback, fill: fill, edgeDepth: edgeDepth,
+                                       seconds: seconds)
+        addSubviews(backward, forward)
+        NSLayoutConstraint.activate([
+            backward.topAnchor.constraint(equalTo: topAnchor),
+            backward.bottomAnchor.constraint(equalTo: bottomAnchor),
+            backward.leadingAnchor.constraint(equalTo: leadingAnchor),
+            backward.widthAnchor.constraint(equalTo: widthAnchor, multiplier: widthRatio),
+            forward.topAnchor.constraint(equalTo: topAnchor),
+            forward.bottomAnchor.constraint(equalTo: bottomAnchor),
+            forward.trailingAnchor.constraint(equalTo: trailingAnchor),
+            forward.widthAnchor.constraint(equalTo: widthAnchor, multiplier: widthRatio)
+        ])
+        seekBackwardArea = backward
+        seekForwardArea = forward
     }
 
     func configurePlayPauseImageView() {
-        playBackgroundCircle.layer.cornerRadius = config.playBackgroundRadius
-        playBackgroundCircle.backgroundColor = config.playBackgroundColor
-        playPressedCircle.layer.cornerRadius = config.playBackgroundRadius
         playPressedCircle.backgroundColor = theme.colors.playButtonPressedOverlay
         playPressedCircle.alpha = 0
         playPauseImageView.contentMode = .center
@@ -220,20 +293,45 @@ private extension PlayerOverlayView {
         if theme.playPauseAnimation.morphsGlyph {
             configurePlayPauseGlyphView()
         }
-        updatePlayPauseImage(animated: false)
-
-        playBackgroundCircle.squareSize(with: config.playBackgroundRadius * 2)
         contentView.centerChild(view: playBackgroundCircle)
-        playPressedCircle.squareSize(with: config.playBackgroundRadius * 2)
         contentView.centerChild(view: playPressedCircle)
-        let offset = theme.metrics.playButtonGlyphOffset
+        circleSizeConstraints = [playBackgroundCircle, playPressedCircle].flatMap { circle in
+            [circle.widthAnchor.constraint(equalToConstant: 0), circle.heightAnchor.constraint(equalToConstant: 0)]
+        }
         playPauseImageView.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            playPauseImageView.centerXAnchor.constraint(equalTo: playBackgroundCircle.centerXAnchor,
-                                                        constant: offset.horizontal),
-            playPauseImageView.centerYAnchor.constraint(equalTo: playBackgroundCircle.centerYAnchor,
-                                                        constant: offset.vertical)
-        ])
+        glyphCenterConstraints = [
+            playPauseImageView.centerXAnchor.constraint(equalTo: playBackgroundCircle.centerXAnchor),
+            playPauseImageView.centerYAnchor.constraint(equalTo: playBackgroundCircle.centerYAnchor)
+        ]
+        NSLayoutConstraint.activate(circleSizeConstraints + glyphCenterConstraints)
+        applyPlayButtonStyle()
+    }
+
+    /// Sizes, fills and scales the button for the start screen or the chrome.
+    func applyPlayButtonStyle() {
+        let style = playButtonStyle
+        circleSizeConstraints.forEach { $0.constant = style.diameter }
+        glyphCenterConstraints.first?.constant = style.glyphOffset.horizontal
+        glyphCenterConstraints.last?.constant = style.glyphOffset.vertical
+        for circle in [playBackgroundCircle, playPressedCircle] {
+            circle.layer.cornerRadius = style.diameter / 2
+        }
+        playBackgroundCircle.backgroundColor = style.background
+        playPressedCircle.alpha = 0
+        isPlayButtonPressed = false
+        setPlayGlyphTint(nil)
+        // The morphing glyph is built at the start screen's scale.
+        let start = startPlayButtonStyle
+        let ratio = theme.icons.custom(.play) != nil && start.glyphScale > 0 ? style.glyphScale / start.glyphScale : 1
+        playPauseGlyphView?.transform = CGAffineTransform(scaleX: ratio, y: ratio)
+        updatePlayPauseImage(animated: false)
+    }
+
+    /// `nil`: the glyph's own tint.
+    func setPlayGlyphTint(_ color: UIColor?) {
+        let tint = color ?? theme.colors.playButtonIcon ?? theme.colors.icon
+        playPauseImageView.tintColor = tint
+        playPauseGlyphView?.tintColor = tint
     }
 
     /// Draws the glyph in place of the images, as big as they are.
@@ -264,9 +362,10 @@ private extension PlayerOverlayView {
         if let playPauseGlyphView {
             playPauseGlyphView.set(playing: isPlaying, animated: animated)
         }
+        let scale = playButtonStyle.glyphScale
         playPauseImageView.image = isPlaying
-            ? themedGlyph(config.pauseImage, icon: .pause, scale: theme.metrics.playButtonGlyphScale)
-            : themedGlyph(config.playImage, icon: .play, scale: theme.metrics.playButtonGlyphScale)
+            ? themedGlyph(config.pauseImage, icon: .pause, scale: scale)
+            : themedGlyph(config.playImage, icon: .play, scale: scale)
     }
 
     /// When the theme supplies the glyph, it is drawn at the theme's scale; otherwise the image stays as is.
@@ -372,6 +471,10 @@ private extension PlayerOverlayView {
 
     func fastForward() {
         delegate?.didFastForward()
+        if let seekForwardArea {
+            seekForwardArea.flash(duration: theme.seekFeedback.duration)
+            return
+        }
 
         fastForwardImageView.alpha = 1.0
         UIView.animate(
@@ -389,6 +492,10 @@ private extension PlayerOverlayView {
 
     func fastBackward() {
         delegate?.didFastBackward()
+        if let seekBackwardArea {
+            seekBackwardArea.flash(duration: theme.seekFeedback.duration)
+            return
+        }
 
         fastBackwardImageView.alpha = 1.0
         UIView.animate(

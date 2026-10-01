@@ -73,7 +73,9 @@ final class KinescopePlayerViewSnapshotRenderer: XCTestCase {
         player.strategy.player.isMuted = true
         player.strategy.player.automaticallyWaitsToMinimizeStalling = false
 
-        let view = makeView(configuration: .themed(Self.appLikeTheme), size: Constants.sizes[0].size)
+        let theme = ProcessInfo.processInfo.environment["KINESCOPE_SNAPSHOT_THEME"] == "player"
+            ? Self.playerFileTheme : Self.appLikeTheme
+        let view = makeView(configuration: .themed(theme), size: Constants.sizes[0].size)
         view.previewView.image = nil
         view.backgroundColor = .black
         player.attach(view: view)
@@ -107,7 +109,7 @@ final class KinescopePlayerViewSnapshotRenderer: XCTestCase {
         let controller = KinescopeFullscreenViewController(
             player: player,
             config: .init(orientation: .landscapeRight, orientationMask: .landscape, backgroundColor: .black),
-            playerViewConfig: .themed(Self.appLikeTheme)
+            playerViewConfig: .themed(theme)
         )
         let landscape = CGRect(x: 0, y: 0, width: 844, height: 390)
         let window = UIWindow(frame: landscape)
@@ -122,6 +124,135 @@ final class KinescopePlayerViewSnapshotRenderer: XCTestCase {
         RunLoop.main.run(until: Date().addingTimeInterval(0.3))
         fullscreenView.showOverlay(true)
         try save(controller.view, to: directory.appendingPathComponent("hls-themed-fullscreen-landscape.png"))
+    }
+
+    /// Every M2 state of the Figma «Player» file (`20485:44504`) drawn with ``playerFileTheme``, named after the
+    /// Figma frames they are compared with.
+    func testRenderPlayerFileStates() throws {
+        let directory = try outputDirectory()
+        let size = Constants.sizes[0].size
+        let view = makeView(configuration: .themed(Self.playerFileTheme), size: size)
+        let sources = ReviewMenuSources()
+        view.bind(playingRateProvider: sources.rate,
+                  videoQualityProvider: sources.quality,
+                  subtitlesProvider: SubtitlesProvider(source: sources))
+        view.set(options: [.subtitles, .airPlay, .settings, .pip, .fullscreen, .more])
+
+        // Idle: the poster and the 72-point play button only.
+        view.stopLoader()
+        try save(view, to: directory.appendingPathComponent("player-1-idle.png"))
+
+        // Paused with the chrome: dim, the 56-point play glyph, the pill bar at 12:49.
+        view.skipStartScreen()
+        view.change(timeControlStatus: .paused)
+        view.overlay?.isSelected = true
+        view.controlPanel?.isHidden = false
+        view.controlPanel?.alpha = 1
+        view.controlPanel?.set(live: nil)
+        view.controlPanel?.setIndicator(to: 769)
+        view.layoutIfNeeded()
+        view.controlPanel?.setBufferred(progress: 0.75)
+        view.controlPanel?.setTimeline(to: 0.5)
+        try save(view, to: directory.appendingPathComponent("player-2-paused.png"))
+
+        // Playing with the chrome: the pause glyph.
+        view.overlay?.set(playing: true)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.4))
+        try save(view, to: directory.appendingPathComponent("player-3-playing.png"))
+
+        // The timeline dragged: the 16-point thumb, no halo.
+        view.controlPanel?.timeline.isTouching = true
+        try save(view, to: directory.appendingPathComponent("player-4-dragging.png"))
+        view.controlPanel?.timeline.isTouching = false
+
+        // The three dots: every option in the pill.
+        view.controlPanel?.expanded = true
+        try save(view, to: directory.appendingPathComponent("player-5-expanded.png"))
+        view.controlPanel?.expanded = false
+
+        // Settings, then its speed and quality levels.
+        view.didSelect(option: .settings)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.4))
+        try save(view, to: directory.appendingPathComponent("player-6-settings.png"))
+        let root = try XCTUnwrap(view.subviews.compactMap { $0 as? SideMenu }.last)
+        view.sideMenuDidSelect(item: .disclosure(title: L10n.Player.playbackSpeed, value: nil), rowIndex: 0, sideMenu: root)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.4))
+        try save(view, to: directory.appendingPathComponent("player-7-speed.png"))
+        let speed = try XCTUnwrap(view.subviews.compactMap { $0 as? SideMenu }.last)
+        view.sideMenuWillBeDismissed(speed, withRoot: false)
+        view.sideMenuDidSelect(item: .disclosure(title: L10n.Player.videoQuality, value: nil), rowIndex: 2, sideMenu: root)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.4))
+        try save(view, to: directory.appendingPathComponent("player-8-quality.png"))
+        view.onTap()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.4))
+
+        // A double tap on the right: the seek feedback.
+        view.overlay?.isSelected = false
+        view.controlPanel?.isHidden = true
+        view.overlay?.accessibilityFastForward()
+        // Layers render their model values: hold the lit side instead of its fade.
+        view.overlay?.seekForwardArea?.layer.removeAllAnimations()
+        view.overlay?.seekForwardArea?.alpha = 1
+        try save(view, to: directory.appendingPathComponent("player-9-rewind.png"))
+    }
+
+    /// Menu values like the Figma frames: 1x, subtitles off, 1080p of a few qualities.
+    private final class ReviewMenuSources: SubtitlesSource {
+        struct Provider: SideMenuItemsProvider {
+            let selectedTitle: String
+            let items: [SideMenu.Item]
+        }
+
+        let rate = Provider(
+            selectedTitle: KinescopePlayingRate.normal.title,
+            items: KinescopePlayingRate.allCases.map {
+                .checkmark(title: NSAttributedString(string: $0.title), selected: $0 == .normal)
+            }
+        )
+        let quality = Provider(
+            selectedTitle: "Auto",
+            items: ["1080p", "720p", "480p", "360p", "Auto"].map {
+                .checkmark(title: NSAttributedString(string: $0), selected: $0 == "Auto")
+            }
+        )
+        var currentSubtitles: String? {
+            nil
+        }
+        var availableSubtitles: [String] {
+            ["English", "Русский"]
+        }
+    }
+
+    /// The Kinescope app's theme by the Figma «Player» file: ``KinescopePlayerTheme/Metrics/player``, the pill bar,
+    /// the glyph-only chrome button, the card menu with row glyphs and the 16% cover.
+    static var playerFileTheme: KinescopePlayerTheme {
+        var theme = appLikeTheme
+        let base = theme.icons
+        let rows: [KinescopePlayerIcon: (ds: String, symbol: String)] = [
+            .menuPlaybackSpeed: ("playback-speed", "gauge.with.dots.needle.33percent"),
+            .menuSubtitles: ("cc-off", "captions.bubble"),
+            .menuQuality: ("quality", "slider.horizontal.3")
+        ]
+        theme.icons = KinescopePlayerTheme.Icons { icon in
+            guard let name = rows[icon] else {
+                return base.custom(icon)
+            }
+            return UIImage(named: "m/\(name.ds)", in: Bundle.module, compatibleWith: nil)
+                ?? UIImage(systemName: name.symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: 18))
+        }
+        theme.metrics = .player
+        theme.colors.overlayDim = UIColor(red: 0x11 / 255, green: 0x11 / 255, blue: 0x11 / 255, alpha: 0.16)
+        theme.colors.controlBarBackground = UIColor(red: 0x11 / 255, green: 0x11 / 255, blue: 0x11 / 255, alpha: 0.32)
+        theme.colors.timelineThumbHalo = nil
+        theme.colors.playButtonBackgroundPressed = nil
+        theme.colors.iconPressed = UIColor.white.withAlphaComponent(0.64)
+        theme.startScreen = .posterAndPlayButton
+        theme.playPauseAnimation = .morph
+        theme.chromePlayButton = .glyphOnly
+        theme.menu = .card
+        theme.seekFeedback = .sideArea
+        theme.colors.moreBackground = UIColor.white.withAlphaComponent(0.16)
+        return theme
     }
 
     private struct HLSDependencies: KinescopePlayerDependencies {
@@ -241,7 +372,8 @@ final class KinescopePlayerViewSnapshotRenderer: XCTestCase {
     private func makeView(configuration: KinescopePlayerViewConfiguration, size: CGSize) -> KinescopePlayerView {
         let controller = UIViewController()
         controller.view.backgroundColor = .black
-        let window = UIWindow(frame: CGRect(origin: .zero, size: size))
+        // Below the sensor housing: an inline player has no safe area insets.
+        let window = UIWindow(frame: CGRect(origin: CGPoint(x: 0, y: 200), size: size))
         window.rootViewController = controller
         window.isHidden = false
         self.window = window

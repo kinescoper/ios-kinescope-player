@@ -72,7 +72,7 @@ final class SideMenu: UIView {
     // MARK: - Views
 
     private weak var tableView: UITableView!
-    private weak var bar: SideMenuBar!
+    private weak var bar: SideMenuBar?
 
     // MARK: - Properties
 
@@ -85,7 +85,27 @@ final class SideMenu: UIView {
 
     private let config: KinescopeSideMenuConfiguration
     private let model: Model
-    private let theme: KinescopePlayerTheme
+    let theme: KinescopePlayerTheme
+
+    private var menu: KinescopePlayerTheme.Menu {
+        theme.menu
+    }
+
+    /// The card's settings level has no title row: its rows say what they are.
+    private var hasBar: Bool {
+        !(menu.isCard && model.isRoot && model.title == L10n.Player.settings)
+    }
+
+    private var rowHeight: CGFloat {
+        menu.isCard ? menu.rowHeight : 36
+    }
+
+    /// Everything shown without scrolling: the card is laid out at this height when the player has room.
+    var preferredHeight: CGFloat {
+        let insets = menu.isCard ? menu.contentInsets : .zero
+        let barHeight = hasBar ? (menu.isCard ? rowHeight : config.bar.preferedHeight) : 0
+        return insets.top + barHeight + CGFloat(model.items.count) * rowHeight + insets.bottom
+    }
 
     // MARK: - Init
 
@@ -118,6 +138,9 @@ extension SideMenu: UITableViewDataSource {
                                                              value: value,
                                                              config: config.item))
             (cell as? DisclosureCell)?.set(icon: theme.icons.image(for: .menuDisclosure), tintColor: theme.colors.icon)
+            (cell as? DisclosureCell)?.set(leadingIcon: leadingIcon(for: title),
+                                           tintColor: theme.colors.icon,
+                                           insets: cellInsets(trailing: menu.contentInsets.right))
             return cell
         case .checkmark(let title, let selected):
             let cell = tableView.dequeueReusableCell(withIdentifier: CheckmarkCell.description(),
@@ -126,6 +149,8 @@ extension SideMenu: UITableViewDataSource {
                                                             selected: selected,
                                                             config: config.item))
             (cell as? CheckmarkCell)?.set(icon: theme.icons.image(for: .menuCheckmark), tintColor: theme.colors.icon)
+            // Figma: the check is 8 from the edge, the title at the row padding.
+            (cell as? CheckmarkCell)?.set(insets: cellInsets(trailing: 8))
             return cell
         case .description(_, let title, let value):
             let cell = tableView.dequeueReusableCell(withIdentifier: DescriptionCell.description(),
@@ -146,7 +171,7 @@ extension SideMenu: UITableViewDataSource {
     }
 
     func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
-        36
+        rowHeight
     }
 
 }
@@ -205,11 +230,23 @@ private extension SideMenu {
         tableView.separatorStyle = .none
 
         addSubview(tableView)
-        bottomChild(view: tableView)
-
-        NSLayoutConstraint.activate([
-            tableView.topAnchor.constraint(equalTo: bar.bottomAnchor)
-        ])
+        if menu.isCard {
+            let insets = menu.contentInsets
+            tableView.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([
+                tableView.topAnchor.constraint(equalTo: bar?.bottomAnchor ?? topAnchor,
+                                               constant: bar == nil ? insets.top : 0),
+                tableView.leadingAnchor.constraint(equalTo: leadingAnchor),
+                tableView.trailingAnchor.constraint(equalTo: trailingAnchor),
+                tableView.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -insets.bottom)
+            ])
+            tableView.alwaysBounceVertical = false
+        } else if let bar {
+            bottomChild(view: tableView)
+            NSLayoutConstraint.activate([
+                tableView.topAnchor.constraint(equalTo: bar.bottomAnchor)
+            ])
+        }
 
         tableView.delegate = self
         tableView.dataSource = self
@@ -222,16 +259,52 @@ private extension SideMenu {
     }
 
     func configureBar() {
+        guard hasBar else {
+            accessibilityLabel = model.title
+            return
+        }
         let bar = SideMenuBar(config: config.bar,
                               theme: theme,
                               model: .init(title: model.title, isRoot: model.isRoot, isDownloadable: model.isDownloadable))
 
         addSubview(bar)
-        topChild(view: bar, padding: 0)
+        if menu.isCard {
+            bar.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([
+                bar.topAnchor.constraint(equalTo: topAnchor, constant: menu.contentInsets.top),
+                bar.leadingAnchor.constraint(equalTo: leadingAnchor),
+                bar.trailingAnchor.constraint(equalTo: trailingAnchor)
+            ])
+        } else {
+            topChild(view: bar, padding: 0)
+        }
 
         bar.delegate = self
 
         self.bar = bar
+    }
+
+    /// The settings level's row glyphs, when the theme supplies them.
+    func leadingIcon(for title: String) -> UIImage? {
+        let icon: KinescopePlayerIcon
+        switch Settings.getType(by: title) {
+        case .playbackSpeed:
+            icon = .menuPlaybackSpeed
+        case .subtitles:
+            icon = .menuSubtitles
+        case .quality:
+            icon = .menuQuality
+        case .none:
+            return nil
+        }
+        return theme.icons.custom(icon) == nil ? nil : theme.icons.image(for: icon)
+    }
+
+    func cellInsets(trailing: CGFloat) -> UIEdgeInsets? {
+        guard menu.isCard else {
+            return nil
+        }
+        return UIEdgeInsets(top: 0, left: menu.contentInsets.left, bottom: 0, right: trailing)
     }
 
 }

@@ -45,6 +45,12 @@ public enum KinescopePlayerIcon: Hashable, CaseIterable {
     case menuDisclosure
     /// Side menu: the selected row.
     case menuCheckmark
+    /// Settings menu: leading glyph of the playback speed row. No bundled image: the row has no glyph without it.
+    case menuPlaybackSpeed
+    /// Settings menu: leading glyph of the subtitles row. No bundled image.
+    case menuSubtitles
+    /// Settings menu: leading glyph of the quality row. No bundled image.
+    case menuQuality
 }
 
 /// Visual theme of the player chrome: icons, colors, fonts and metrics.
@@ -65,6 +71,12 @@ public struct KinescopePlayerTheme {
     /// ``KinescopePlayerViewConfiguration``'s `activityIndicator`.
     public var loader: (() -> KinescopeActivityIndicator)?
     public var playPauseAnimation: PlayPauseAnimation
+    /// The play/pause button while the chrome is shown. `nil`: as on the start screen (``Metrics/playButtonDiameter``,
+    /// ``Colors/playButtonBackground``, ``Metrics/playButtonGlyphScale``).
+    public var chromePlayButton: PlayButton?
+    public var menu: Menu
+    /// What a double tap on a side of the video shows.
+    public var seekFeedback: SeekFeedback
 
     public init(icons: Icons = .default,
                 colors: Colors = .default,
@@ -73,7 +85,10 @@ public struct KinescopePlayerTheme {
                 startScreen: StartScreen = .sdk,
                 accessibilityLabels: AccessibilityLabels = .default,
                 loader: (() -> KinescopeActivityIndicator)? = nil,
-                playPauseAnimation: PlayPauseAnimation = .none) {
+                playPauseAnimation: PlayPauseAnimation = .none,
+                chromePlayButton: PlayButton? = nil,
+                menu: Menu = .sideSheet,
+                seekFeedback: SeekFeedback = .icon) {
         self.icons = icons
         self.colors = colors
         self.fonts = fonts
@@ -82,6 +97,9 @@ public struct KinescopePlayerTheme {
         self.accessibilityLabels = accessibilityLabels
         self.loader = loader
         self.playPauseAnimation = playPauseAnimation
+        self.chromePlayButton = chromePlayButton
+        self.menu = menu
+        self.seekFeedback = seekFeedback
     }
 
     /// The SDK's own look.
@@ -248,6 +266,149 @@ public extension KinescopePlayerTheme {
 
 }
 
+// MARK: - Play button
+
+public extension KinescopePlayerTheme {
+
+    /// The play/pause button at the center of the overlay.
+    struct PlayButton {
+        /// Diameter of the button and of its background circle.
+        public var diameter: CGFloat
+        /// The circle. `.clear` draws the glyph alone; then a press tints the glyph with ``Colors/iconPressed``
+        /// instead of filling the circle.
+        public var background: UIColor
+        /// Scale of a supplied play/pause glyph inside the button.
+        public var glyphScale: CGFloat
+        /// Shift of the glyph from the button center.
+        public var glyphOffset: UIOffset
+
+        public init(diameter: CGFloat, background: UIColor, glyphScale: CGFloat, glyphOffset: UIOffset = .zero) {
+            self.diameter = diameter
+            self.background = background
+            self.glyphScale = glyphScale
+            self.glyphOffset = glyphOffset
+        }
+
+        /// Figma «Player» `M / Play` in the paused `Controls` (`20485:44511`): a 56-point glyph without a circle,
+        /// a 24-point design system icon drawn like an instance resized from 24 to 56.
+        public static let glyphOnly = PlayButton(diameter: 56, background: .clear, glyphScale: 56.0 / 24.0)
+    }
+
+}
+
+// MARK: - Seek feedback
+
+public extension KinescopePlayerTheme {
+
+    /// The answer to a double tap on the left or right part of the video, which seeks back or forward.
+    struct SeekFeedback {
+
+        public enum Style {
+            /// The SDK's own: the ``KinescopePlayerIcon/fastForward`` or ``KinescopePlayerIcon/fastBackward`` glyph
+            /// grows and fades out at the side.
+            case icon
+            /// Figma «Player» `Rewind` (`18600:33369`): the tapped side lit with `fill` over `widthRatio` of the
+            /// width, its inner edge bulging by `edgeDepth`, with three arrows and the seek length in its center.
+            case sideArea(fill: UIColor, widthRatio: CGFloat, edgeDepth: CGFloat)
+        }
+
+        public var style: Style
+        /// The seek length under the arrows.
+        public var font: UIFont
+        public var textColor: UIColor
+        /// The seek length in seconds as text; `nil` in `init` reads the SDK's strings («%d sec», «%d сек»).
+        public var text: (Int) -> String
+        /// How long the side stays lit.
+        public var duration: TimeInterval
+
+        public init(style: Style,
+                    font: UIFont = .systemFont(ofSize: 12, weight: .medium),
+                    textColor: UIColor = .white,
+                    text: ((Int) -> String)? = nil,
+                    duration: TimeInterval = 0.6) {
+            self.style = style
+            self.font = font
+            self.textColor = textColor
+            self.text = text ?? { L10n.Player.seekSeconds($0) }
+            self.duration = duration
+        }
+
+        /// The SDK's own glyph.
+        public static let icon = SeekFeedback(style: .icon)
+
+        /// Figma «Player» `Rewind`: 163 of 375 points lit with `Surface/player/rewind/default` (white 16 %), the
+        /// inner edge bulging by 32, `Lead Body/12 Medium` white text.
+        public static let sideArea = SeekFeedback(
+            style: .sideArea(fill: UIColor(white: 1, alpha: 0.16), widthRatio: 163.0 / 375.0, edgeDepth: 32)
+        )
+    }
+
+}
+
+// MARK: - Menu
+
+public extension KinescopePlayerTheme {
+
+    /// How the settings, speed, quality and subtitles menus are shown.
+    struct Menu {
+
+        public enum Presentation: Equatable {
+            /// The SDK's own: a sheet over the whole height that slides in from the trailing edge, with a title
+            /// bar and a close button on every level.
+            case sideSheet
+            /// A card in the trailing bottom corner (Figma «Player» `Settings/Normal`, `20485:44516`): no title
+            /// on the root level, a back row with the title on a nested one, no close button (a tap outside closes).
+            /// - parameter width: Card width, at most the player width less the margins.
+            /// - parameter margins: Distance from the player edges; the card grows up from the bottom margin
+            /// and scrolls once it reaches the top one.
+            case card(width: CGFloat, cornerRadius: CGFloat, margins: UIEdgeInsets)
+        }
+
+        public var presentation: Presentation
+        /// Background of the menu. `nil` keeps ``KinescopeSideMenuConfiguration``'s.
+        public var background: UIColor?
+        /// Laid behind the menu over the player. `nil` keeps ``KinescopePlayerShadowOverlayConfiguration``'s.
+        public var dimming: UIColor?
+        /// Height of a row, the back row included.
+        public var rowHeight: CGFloat
+        /// Padding of the rows inside the card: top and bottom of the list, leading and trailing of a row.
+        public var contentInsets: UIEdgeInsets
+
+        public init(presentation: Presentation,
+                    background: UIColor? = nil,
+                    dimming: UIColor? = nil,
+                    rowHeight: CGFloat = 36,
+                    contentInsets: UIEdgeInsets = .zero) {
+            self.presentation = presentation
+            self.background = background
+            self.dimming = dimming
+            self.rowHeight = rowHeight
+            self.contentInsets = contentInsets
+        }
+
+        /// The SDK's own side sheet.
+        public static let sideSheet = Menu(presentation: .sideSheet)
+
+        /// Figma «Player» settings menu: a 280-point card with 6-point corners, 16 from the trailing edge and
+        /// 44 from the bottom, `#111`, 36-point rows padded 16 at the sides and 8 at the top and bottom, no dimming.
+        public static let card = Menu(
+            presentation: .card(width: 280, cornerRadius: 6, margins: UIEdgeInsets(top: 8, left: 16, bottom: 44, right: 16)),
+            background: UIColor(red: 0x11 / 255.0, green: 0x11 / 255.0, blue: 0x11 / 255.0, alpha: 1),
+            dimming: .clear,
+            rowHeight: 36,
+            contentInsets: UIEdgeInsets(top: 8, left: 16, bottom: 8, right: 16)
+        )
+
+        var isCard: Bool {
+            if case .card = presentation {
+                return true
+            }
+            return false
+        }
+    }
+
+}
+
 // MARK: - Icons
 
 public extension KinescopePlayerTheme {
@@ -321,6 +482,13 @@ public extension KinescopePlayerTheme {
         public var overlayDim: UIColor
         /// Video title and subtitle over the video.
         public var title: UIColor
+        /// Background of the control bar, drawn inside ``Metrics/controlBarInsets`` with
+        /// ``Metrics/controlBarCornerRadius``. `nil`: no background.
+        public var controlBarBackground: UIColor?
+        /// Halo around the timeline thumb while it is dragged. `nil`: no halo.
+        public var timelineThumbHalo: UIColor?
+        /// Circle under the three dots option, as big as the option. `nil`: no circle.
+        public var moreBackground: UIColor?
 
         public init(icon: UIColor,
                     iconPressed: UIColor?,
@@ -334,7 +502,10 @@ public extension KinescopePlayerTheme {
                     playButtonIcon: UIColor?,
                     overlayDim: UIColor,
                     title: UIColor,
-                    playButtonPressedOverlay: UIColor? = nil) {
+                    playButtonPressedOverlay: UIColor? = nil,
+                    controlBarBackground: UIColor? = nil,
+                    timelineThumbHalo: UIColor? = UIColor(red: 1, green: 1, blue: 1, alpha: 0.16),
+                    moreBackground: UIColor? = nil) {
             self.icon = icon
             self.iconPressed = iconPressed
             self.text = text
@@ -348,6 +519,9 @@ public extension KinescopePlayerTheme {
             self.playButtonIcon = playButtonIcon
             self.overlayDim = overlayDim
             self.title = title
+            self.controlBarBackground = controlBarBackground
+            self.timelineThumbHalo = timelineThumbHalo
+            self.moreBackground = moreBackground
         }
 
         public static let `default` = Colors(
@@ -448,6 +622,10 @@ public extension KinescopePlayerTheme {
         public var timelineThumbVisibleWhenIdle: Bool
         /// `true` reserves the width of `H:MM:SS` for the time; `false` sizes it to the current text.
         public var timeReservesHours: Bool
+        /// Padding of the time, the timeline and the options inside the control bar background.
+        public var controlBarPadding: UIEdgeInsets
+        /// Rounding of the control bar background, at most half its height.
+        public var controlBarCornerRadius: CGFloat
 
         public init(controlBarInsets: UIEdgeInsets,
                     controlBarHeight: CGFloat,
@@ -463,7 +641,9 @@ public extension KinescopePlayerTheme {
                     timelineCornerRadius: CGFloat,
                     timelineThumbRadius: CGFloat,
                     timelineThumbVisibleWhenIdle: Bool,
-                    timeReservesHours: Bool) {
+                    timeReservesHours: Bool,
+                    controlBarPadding: UIEdgeInsets = .zero,
+                    controlBarCornerRadius: CGFloat = 0) {
             self.controlBarInsets = controlBarInsets
             self.controlBarHeight = controlBarHeight
             self.controlBarSpacing = controlBarSpacing
@@ -479,6 +659,8 @@ public extension KinescopePlayerTheme {
             self.timelineThumbRadius = timelineThumbRadius
             self.timelineThumbVisibleWhenIdle = timelineThumbVisibleWhenIdle
             self.timeReservesHours = timeReservesHours
+            self.controlBarPadding = controlBarPadding
+            self.controlBarCornerRadius = controlBarCornerRadius
         }
 
         /// The SDK's own geometry.
@@ -520,6 +702,30 @@ public extension KinescopePlayerTheme {
             timelineThumbRadius: 6,
             timelineThumbVisibleWhenIdle: false,
             timeReservesHours: false
+        )
+
+        /// Figma «Player» file (`20485:44504`): a pill bar 343×44 16 from the sides and 8 from the bottom, padded 8
+        /// with 24-point rounding, a 28-point row with 12-point gaps, 28-point options 12 apart, the 72-point start
+        /// play button with a 36-point glyph 2 points right of the center, a rounded 4-point track with a 16-point
+        /// thumb only while dragged, time as wide as its text.
+        public static let player = Metrics(
+            controlBarInsets: UIEdgeInsets(top: 0, left: 16, bottom: 8, right: 16),
+            controlBarHeight: 28,
+            controlBarSpacing: 12,
+            optionSize: 28,
+            optionSpacing: 12,
+            collapsedOptionsCount: 2,
+            iconGlyphScale: 28.0 / 24.0,
+            playButtonDiameter: 72,
+            playButtonGlyphScale: 36.0 / 24.0,
+            playButtonGlyphOffset: UIOffset(horizontal: 2, vertical: 0),
+            timelineHeight: 4,
+            timelineCornerRadius: 2,
+            timelineThumbRadius: 8,
+            timelineThumbVisibleWhenIdle: false,
+            timeReservesHours: false,
+            controlBarPadding: UIEdgeInsets(top: 8, left: 8, bottom: 8, right: 8),
+            controlBarCornerRadius: 24
         )
     }
 
@@ -568,6 +774,8 @@ extension KinescopePlayerIcon {
             return "forward"
         case .menuCheckmark:
             return "checkmark"
+        case .menuPlaybackSpeed, .menuSubtitles, .menuQuality:
+            return nil
         }
     }
 

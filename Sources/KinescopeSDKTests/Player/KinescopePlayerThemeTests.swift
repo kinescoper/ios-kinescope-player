@@ -71,8 +71,13 @@ final class KinescopePlayerThemeTests: XCTestCase {
         XCTAssertNil(icons.custom(.pip))
         XCTAssertEqual(icons.image(for: .more)?.renderingMode, .alwaysTemplate)
         XCTAssertNotNil(icons.image(for: .pip))
-        for icon in KinescopePlayerIcon.allCases {
+        // The settings rows have no glyph of their own: they get one only from a theme.
+        let themeOnly: Set<KinescopePlayerIcon> = [.menuPlaybackSpeed, .menuSubtitles, .menuQuality]
+        for icon in KinescopePlayerIcon.allCases where !themeOnly.contains(icon) {
             XCTAssertNotNil(icon.bundledImageName, "\(icon) has no bundled image")
+        }
+        for icon in themeOnly {
+            XCTAssertNil(icons.image(for: icon))
         }
     }
 

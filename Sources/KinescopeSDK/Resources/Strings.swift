@@ -98,6 +98,10 @@ internal enum L10n {
         internal static let fastForward = L10n.tr("Localizable", "Player.fastForward")
         /// Skip back
         internal static let fastBackward = L10n.tr("Localizable", "Player.fastBackward")
+        /// %d sec
+        internal static func seekSeconds(_ seconds: Int) -> String {
+            L10n.tr("Localizable", "Player.seekSeconds", seconds)
+        }
         /// Back
         internal static let back = L10n.tr("Localizable", "Player.back")
         /// Close

@@ -22,6 +22,8 @@ class PlayerControlView: UIControl {
     private(set) var timeIndicator: TimeIndicatorView!
     private(set) var timeline: TimelineView!
     private(set) var optionsMenu: PlayerControlOptionsView!
+    /// The bar's own background (``KinescopePlayerTheme/Colors/controlBarBackground``), inside the insets.
+    private(set) var barBackground = UIView()
 
     private let config: KinescopeControlPanelConfiguration
     private let theme: KinescopePlayerTheme
@@ -54,7 +56,14 @@ class PlayerControlView: UIControl {
 
     override var intrinsicContentSize: CGSize {
         let insets = theme.metrics.controlBarInsets
-        return .init(width: .greatestFiniteMagnitude, height: config.preferedHeight + insets.top + insets.bottom)
+        let padding = theme.metrics.controlBarPadding
+        let height = config.preferedHeight + insets.top + insets.bottom + padding.top + padding.bottom
+        return .init(width: .greatestFiniteMagnitude, height: height)
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        barBackground.layer.cornerRadius = min(theme.metrics.controlBarCornerRadius, barBackground.bounds.height / 2)
     }
 
     // MARK: - Internal Properties
@@ -159,7 +168,13 @@ private extension PlayerControlView {
         timeline = TimelineView(config: config.timeline, theme: theme)
         optionsMenu = PlayerControlOptionsView(config: config.optionsMenu, theme: theme, isFullscreen: isFullscreen)
 
-        addSubviews(liveIndicator, timeIndicator, timeline, optionsMenu)
+        barBackground.backgroundColor = theme.colors.controlBarBackground
+        barBackground.isHidden = theme.colors.controlBarBackground == nil
+        barBackground.isUserInteractionEnabled = false
+        barBackground.layer.cornerCurve = .continuous
+        barBackground.layer.masksToBounds = true
+
+        addSubviews(barBackground, liveIndicator, timeIndicator, timeline, optionsMenu)
 
         setupConstraints()
 
@@ -179,15 +194,20 @@ private extension PlayerControlView {
         optionsMenu.setContentHuggingPriority(.defaultHigh, for: .horizontal)
 
         let insets = theme.metrics.controlBarInsets
+        let padding = theme.metrics.controlBarPadding
         let spacing = theme.metrics.controlBarSpacing
         let content = UILayoutGuide()
         addLayoutGuide(content)
 
         NSLayoutConstraint.activate([
-            content.topAnchor.constraint(equalTo: topAnchor, constant: insets.top),
-            content.leadingAnchor.constraint(equalTo: leadingAnchor, constant: insets.left),
-            content.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -insets.right),
-            content.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -insets.bottom),
+            barBackground.topAnchor.constraint(equalTo: topAnchor, constant: insets.top),
+            barBackground.leadingAnchor.constraint(equalTo: leadingAnchor, constant: insets.left),
+            barBackground.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -insets.right),
+            barBackground.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -insets.bottom),
+            content.topAnchor.constraint(equalTo: barBackground.topAnchor, constant: padding.top),
+            content.leadingAnchor.constraint(equalTo: barBackground.leadingAnchor, constant: padding.left),
+            content.trailingAnchor.constraint(equalTo: barBackground.trailingAnchor, constant: -padding.right),
+            content.bottomAnchor.constraint(equalTo: barBackground.bottomAnchor, constant: -padding.bottom),
             liveIndicator.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             liveIndicator.centerYAnchor.constraint(equalTo: content.centerYAnchor),
             timeIndicator.leadingAnchor.constraint(equalTo: content.leadingAnchor),

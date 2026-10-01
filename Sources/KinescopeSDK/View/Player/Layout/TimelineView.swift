@@ -44,9 +44,10 @@ class TimelineView: UIControl {
     private let config: KinescopePlayerTimelineConfiguration
     private let theme: KinescopePlayerTheme
 
-    private var isTouching = false {
+    /// Dragging: the thumb shows over the track. Set by the touches; tests set it to draw the dragged state.
+    var isTouching = false {
         didSet {
-            activeCircleView.isHidden = !isTouching
+            activeCircleView.isHidden = !isTouching || theme.colors.timelineThumbHalo == nil
             circleView.isHidden = !(isTouching || showsIdleThumb)
         }
     }
@@ -210,7 +211,7 @@ private extension TimelineView {
         addSubview(pastProgress)
         self.pastProgress = pastProgress
 
-        let activeCircleView = createCircle(with: UIColor(red: 1, green: 1, blue: 1, alpha: 0.16), radius: config.circleRadius + 4)
+        let activeCircleView = createCircle(with: theme.colors.timelineThumbHalo ?? .clear, radius: config.circleRadius + 4)
         addSubview(activeCircleView)
         self.activeCircleView = activeCircleView
         self.activeCircleView.isHidden = true

@@ -87,6 +87,14 @@ public extension KinescopePlayerViewConfiguration {
         let fonts = theme.fonts
         let metrics = theme.metrics
         let image = { (icon: KinescopePlayerIcon) in theme.icons.image(for: icon) ?? UIImage() }
+        let sideMenu = KinescopeSideMenuConfiguration.builder()
+        if let background = theme.menu.background {
+            _ = sideMenu.setBackgroundColor(background)
+        }
+        let shadow = KinescopePlayerShadowOverlayConfiguration.builder()
+        if let dimming = theme.menu.dimming {
+            _ = shadow.setColor(dimming)
+        }
         return .builder()
             .setOverlay(
                 KinescopePlayerOverlayConfigurationBuilder(configuration: .default)
@@ -134,7 +142,7 @@ public extension KinescopePlayerViewConfiguration {
                     .build()
             )
             .setSideMenu(
-                .builder()
+                sideMenu
                     .setItem(
                         .builder()
                             .setTitleFont(fonts.menuItem)
@@ -148,6 +156,7 @@ public extension KinescopePlayerViewConfiguration {
                     )
                     .build()
             )
+            .setShadowOverlay(shadow.build())
             .setTheme(theme)
             .build()
     }

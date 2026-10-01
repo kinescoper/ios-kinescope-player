@@ -37,6 +37,11 @@ final class OptionButton: UIButton {
         }
     }
 
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        layer.cornerRadius = min(bounds.width, bounds.height) / 2
+    }
+
     /// A 28-point option still takes taps 44 points wide and high.
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
         minimumHitArea.contains(point)
@@ -71,6 +76,9 @@ private extension OptionButton {
             adjustsImageWhenHighlighted = false
         }
         imageView?.contentMode = .center
+        if option == .more, let background = theme.colors.moreBackground {
+            backgroundColor = background
+        }
         accessibilityLabel = theme.accessibilityLabels.label(for: option, isFullscreen: isFullscreen)
         updateTint()
     }

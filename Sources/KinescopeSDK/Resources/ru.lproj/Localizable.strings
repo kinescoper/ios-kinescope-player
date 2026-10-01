@@ -51,3 +51,4 @@
 "Player.fastBackward" = "Перемотать назад";
 "Player.back" = "Назад";
 "Player.close" = "Закрыть";
+"Player.seekSeconds" = "%d сек";
