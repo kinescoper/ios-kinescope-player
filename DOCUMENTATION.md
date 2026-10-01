@@ -23,6 +23,46 @@ or you can use predefined configurable configuration `accentTimeLineAndPlayButto
 
 Using these builders you can change any property of `KinescopePlayerViewConfiguration` and apply it to player view. To learn about properties more you should read next chapters of this doc. 
 
+## Theme
+
+`KinescopePlayerTheme` draws the chrome with your own design system without the SDK depending on it: icons, colors, fonts and metrics. `KinescopePlayerTheme.default` is the SDK's own look.
+
+```swift
+let theme = KinescopePlayerTheme(
+    icons: .init { icon in
+        switch icon {
+        case .play:
+            return UIImage(named: "play-player")
+        case .more:
+            return UIImage(named: "dots-horizontal")
+        default:
+            return nil // the SDK's bundled image
+        }
+    },
+    colors: colors,           // KinescopePlayerTheme.Colors: icons and their pressed color, timeline, play button
+    fonts: .default,          // time, title over the video, side menu
+    metrics: .compact,        // control bar insets and gaps, option and play button sizes, timeline
+    startScreen: .posterAndPlayButton // before the first play: the poster and the play button only
+)
+playerView.setLayout(with: .themed(theme))
+```
+
+- `KinescopePlayerViewConfiguration.themed(_:)` fills the nested configurations (overlay, control panel, side menu) from the theme. To keep hand-made nested configurations and only add what they do not cover (icons, pressed states, insets and gaps), use `.builder().setTheme(theme)`.
+- Supplied icons are drawn as templates tinted with `colors.icon`, centered at their own size times `metrics.iconGlyphScale`, so glyphs cut to their path (like design system icons) are not stretched. `.exitFullscreen` is shown in place of `.fullscreen` inside the full screen player.
+- A pressed option changes its color to `colors.iconPressed`; the play button changes its background to `colors.playButtonBackgroundPressed` and lays `colors.playButtonPressedOverlay` over it. `nil` keeps the system dimming and no pressed background or layer.
+- `Metrics.compact` is the Kinescope mobile app geometry: bar 16 from the sides and 8 from the bottom, gap 12, 28-point options 12 apart, 64-point play button with the glyph at its own size, rounded track without an idle thumb, time as wide as its text.
+- `startScreen: .posterAndPlayButton`: a prepared player (`prepare()`, no autoplay) shows only the poster and the play button, with no dimming, title or control bar; taps outside the button do nothing. The button is there from the start of loading, with no loading indicator under it; the indicator shows only after a tap, until playback starts. Once playback starts, the usual chrome takes over (it shows, then hides by itself). A view attached to a player that has already played (the full screen one) skips it. `.sdk` (the default) keeps the SDK behavior.
+- `loader`: makes the loading indicator of each player view (any `UIView & KinescopeActivityIndicating`), for your design system's loader in place of the system spinner: buffering while playing and loading after a tap. `nil` keeps the configuration's `activityIndicator`.
+- `playPauseAnimation: .morph`: the play/pause glyph is a shape that morphs between the triangle and the bars (200 ms, ease in and out, like media3 on Android), sized like the play and pause images and tinted like them; the pressed state fades out over the same time, so a quick tap is seen. `.none` (the default) swaps the images.
+- `accessibilityLabels`: VoiceOver labels of the play/pause button (it follows the state; the double-tap seeks are its custom actions), the timeline (adjustable: swipe up or down to seek by 5%), every option and the side menu's back and close. `.default` takes the SDK's strings (English, Russian), which an app can also override in `KinescopeLocalizable.strings`.
+- Tap targets: options, the AirPlay picker and the side menu buttons take taps at least 44 points wide and high, also past the control bar; the nearest option wins between two. While VoiceOver is running, the chrome does not hide by itself.
+- The poster is placed like the video: `scaleAspectFit` for `.resizeAspect` (the default gravity), `scaleAspectFill` for `.resizeAspectFill`.
+- `Metrics.player` is the Kinescope «Player» Figma file geometry (the mobile player component `7316:33975`, the set the Android player follows): a 28-point bar without a background 16 from the sides and 8 from the bottom, gaps 12, 28-point options 12 apart, a 72-point start play button with a 36-point glyph that grows to 80 while pressed (`metrics.playButtonPressedDiameter`), a 16-point thumb only while dragged. `colors.timelineThumbHalo = nil` drops the halo around the dragged thumb.
+- `chromePlayButton`: the play/pause button while the chrome is shown, when it differs from the start screen's. `.glyphOnly` is a 56-point glyph without a circle; a press tints it with `colors.iconPressed`. `.android` is the Android SDK's center control: 56 points, the glyph in a 34-point square, on screen while paused or ended also without the chrome (`showsWhilePaused`), hidden while the loader spins.
+- `playPauseAnimation: .android`: the Android SDK's `KinescopePlayPauseMorphView`: the Kinescope play and pause paths (the same as its `ic_play_pause_morph`) morph in 83 ms with `fast_out_slow_in`, a press zooms the glyph to 108% in 90 ms and back, and after the end the replay glyph (`ic_controls_rewind`) shows; a tap on it plays from the start.
+- `menu: .card`: the settings, speed, quality and subtitles menus as a 280-point card in the trailing bottom corner instead of a full-height sheet: no title on the settings level, a back row with the title on a nested one, no close button (a tap outside closes), rows padded 16 with the `.menuPlaybackSpeed`, `.menuSubtitles` and `.menuQuality` glyphs when the icons supply them. It scrolls when the player is low. `.sideSheet` (the default) keeps the SDK's sheet.
+- `seekFeedback: .sideArea`: a double tap lights the tapped side (163 of 375 points, inner edge bulging, white 16%) with three arrows and the seek length («15 sec»; `text` takes your own string). `.icon` (the default) keeps the growing glyph.
+
 ## Managing of options menu
 
 ![Player Options Menu](doc_support/options_menu.png)

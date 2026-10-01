@@ -82,6 +82,16 @@ extension UIView {
         ])
     }
 
+    /// Pinned to the safe area on every side but the top: in landscape the sides keep clear of the sensor housing.
+    func bottomChildInsideSafeArea(view: UIView) {
+        view.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            view.leadingAnchor.constraint(equalTo: safeAreaLayoutGuide.leadingAnchor),
+            view.trailingAnchor.constraint(equalTo: safeAreaLayoutGuide.trailingAnchor),
+            view.bottomAnchor.constraint(equalTo: safeAreaLayoutGuide.bottomAnchor)
+        ])
+    }
+
     func bottomLeftChildWithSafeArea(view: UIView, with offset: CGFloat) {
         let bottomAnchor: NSLayoutYAxisAnchor
         if #available(iOS 11.0, *) {

@@ -119,6 +119,7 @@ private extension KinescopeFullscreenViewController {
         view.backgroundColor = config.backgroundColor
 
         let playerView = KinescopePlayerView()
+        playerView.isFullscreenHost = true
         playerView.setLayout(with: playerViewConfig)
         view.addSubview(playerView)
         view.stretch(view: playerView)

@@ -15,6 +15,8 @@ final class CheckmarkCell: UITableViewCell {
     private weak var titleLabel: UILabel?
     private weak var iconView: UIImageView?
     private var model: Model?
+    private var titleLeading: NSLayoutConstraint?
+    private var iconTrailing: NSLayoutConstraint?
 
     // MARK: - Initialization
 
@@ -45,6 +47,21 @@ final class CheckmarkCell: UITableViewCell {
     }
 
     // MARK: - Internal Methods
+
+    /// The theme's glyph; `nil` keeps the bundled one.
+    func set(icon: UIImage?, tintColor: UIColor) {
+        guard let icon else {
+            return
+        }
+        iconView?.image = icon
+        iconView?.tintColor = tintColor
+    }
+
+    /// The card menu's padding: the title at `insets.left`, the check `insets.right` from the edge.
+    func set(insets: UIEdgeInsets?) {
+        titleLeading?.constant = insets?.left ?? 24
+        iconTrailing?.constant = -(insets?.right ?? 8)
+    }
 
     func configure(with model: Model) {
         self.model = model
@@ -80,15 +97,19 @@ private extension CheckmarkCell {
         addSubview(titleLabel)
         addSubview(iconView)
 
+        let titleLeading = titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 24.0)
+        let iconTrailing = iconView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8)
         NSLayoutConstraint.activate([
             titleLabel.topAnchor.constraint(equalTo: topAnchor, constant: 8.0),
             titleLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -8.0),
-            titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 24.0),
+            titleLeading,
             titleLabel.trailingAnchor.constraint(equalTo: iconView.leadingAnchor, constant: -4.0),
 
             iconView.centerYAnchor.constraint(equalTo: centerYAnchor),
-            iconView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8)
+            iconTrailing
         ])
+        self.titleLeading = titleLeading
+        self.iconTrailing = iconTrailing
 
         self.titleLabel = titleLabel
         self.iconView = iconView

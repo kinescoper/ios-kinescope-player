@@ -24,11 +24,15 @@ class PlayerControlView: UIControl {
     private(set) var optionsMenu: PlayerControlOptionsView!
 
     private let config: KinescopeControlPanelConfiguration
+    private let theme: KinescopePlayerTheme
+    private let isFullscreen: Bool
 
     weak var output: PlayerControlOutput?
 
-    init(config: KinescopeControlPanelConfiguration) {
+    init(config: KinescopeControlPanelConfiguration, theme: KinescopePlayerTheme = .default, isFullscreen: Bool = false) {
         self.config = config
+        self.theme = theme
+        self.isFullscreen = isFullscreen
         super.init(frame: .zero)
         setupInitialState(with: config)
     }
@@ -37,8 +41,20 @@ class PlayerControlView: UIControl {
         fatalError("init(coder:) has not been implemented")
     }
 
+    /// The bar is lower than a 44-point target: touches just outside it reach the options and the timeline when
+    /// their grown areas take them; anything else there stays with the views behind.
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        bounds.contains(point) || [optionsMenu, timeline].contains { control in
+            guard let control, !control.isHidden, control.alpha > 0.01 else {
+                return false
+            }
+            return control.point(inside: convert(point, to: control), with: event)
+        }
+    }
+
     override var intrinsicContentSize: CGSize {
-        .init(width: .greatestFiniteMagnitude, height: config.preferedHeight)
+        let insets = theme.metrics.controlBarInsets
+        return .init(width: .greatestFiniteMagnitude, height: config.preferedHeight + insets.top + insets.bottom)
     }
 
     // MARK: - Internal Properties
@@ -139,9 +155,9 @@ private extension PlayerControlView {
         backgroundColor = config.backgroundColor
         
         liveIndicator = LiveIndicatorView(config: config.liveIndicator)
-        timeIndicator = TimeIndicatorView(config: config.timeIndicator)
-        timeline = TimelineView(config: config.timeline)
-        optionsMenu = PlayerControlOptionsView(config: config.optionsMenu)
+        timeIndicator = TimeIndicatorView(config: config.timeIndicator, theme: theme)
+        timeline = TimelineView(config: config.timeline, theme: theme)
+        optionsMenu = PlayerControlOptionsView(config: config.optionsMenu, theme: theme, isFullscreen: isFullscreen)
 
         addSubviews(liveIndicator, timeIndicator, timeline, optionsMenu)
 
@@ -158,20 +174,30 @@ private extension PlayerControlView {
         timeline.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
         timeline.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
-        optionsMenu.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
+        // Expanded options win over the time and the timeline, which are hidden meanwhile.
+        optionsMenu.setContentCompressionResistancePriority(.defaultHigh + 1, for: .horizontal)
         optionsMenu.setContentHuggingPriority(.defaultHigh, for: .horizontal)
 
+        let insets = theme.metrics.controlBarInsets
+        let spacing = theme.metrics.controlBarSpacing
+        let content = UILayoutGuide()
+        addLayoutGuide(content)
+
         NSLayoutConstraint.activate([
-            liveIndicator.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
-            liveIndicator.centerYAnchor.constraint(equalTo: centerYAnchor),
-            timeIndicator.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
-            timeIndicator.centerYAnchor.constraint(equalTo: centerYAnchor),
-            timeline.leadingAnchor.constraint(equalTo: timeIndicator.trailingAnchor, constant: 16),
-            timeline.topAnchor.constraint(equalTo: topAnchor),
-            timeline.bottomAnchor.constraint(equalTo: bottomAnchor),
-            timeline.trailingAnchor.constraint(equalTo: optionsMenu.leadingAnchor, constant: -16),
-            optionsMenu.centerYAnchor.constraint(equalTo: centerYAnchor),
-            optionsMenu.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16)
+            content.topAnchor.constraint(equalTo: topAnchor, constant: insets.top),
+            content.leadingAnchor.constraint(equalTo: leadingAnchor, constant: insets.left),
+            content.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -insets.right),
+            content.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -insets.bottom),
+            liveIndicator.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+            liveIndicator.centerYAnchor.constraint(equalTo: content.centerYAnchor),
+            timeIndicator.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+            timeIndicator.centerYAnchor.constraint(equalTo: content.centerYAnchor),
+            timeline.leadingAnchor.constraint(equalTo: timeIndicator.trailingAnchor, constant: spacing),
+            timeline.topAnchor.constraint(equalTo: content.topAnchor),
+            timeline.bottomAnchor.constraint(equalTo: content.bottomAnchor),
+            timeline.trailingAnchor.constraint(equalTo: optionsMenu.leadingAnchor, constant: -spacing),
+            optionsMenu.centerYAnchor.constraint(equalTo: content.centerYAnchor),
+            optionsMenu.trailingAnchor.constraint(equalTo: content.trailingAnchor)
         ])
 
     }

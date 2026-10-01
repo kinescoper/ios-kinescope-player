@@ -88,6 +88,24 @@ internal enum L10n {
         internal static let reset = L10n.tr("Localizable", "Player.reset")
         /// Options
         internal static let options = L10n.tr("Localizable", "Player.options")
+        /// More options
+        internal static let moreOptions = L10n.tr("Localizable", "Player.moreOptions")
+        /// Picture in Picture
+        internal static let pictureInPicture = L10n.tr("Localizable", "Player.pictureInPicture")
+        /// Playback position
+        internal static let timeline = L10n.tr("Localizable", "Player.timeline")
+        /// Skip forward
+        internal static let fastForward = L10n.tr("Localizable", "Player.fastForward")
+        /// Skip back
+        internal static let fastBackward = L10n.tr("Localizable", "Player.fastBackward")
+        /// %d sec
+        internal static func seekSeconds(_ seconds: Int) -> String {
+            L10n.tr("Localizable", "Player.seekSeconds", seconds)
+        }
+        /// Back
+        internal static let back = L10n.tr("Localizable", "Player.back")
+        /// Close
+        internal static let close = L10n.tr("Localizable", "Player.close")
     }
 
 }
@@ -101,22 +119,7 @@ extension L10n {
     if clientFormat != key {
         return String(format: clientFormat, locale: Locale.current, arguments: args)
     }
-    let sdkFormat = BundleToken.bundle.localizedString(forKey: key, value: nil, table: table)
+    let sdkFormat = Bundle.kinescopeResources.localizedString(forKey: key, value: nil, table: table)
     return String(format: sdkFormat, locale: Locale.current, arguments: args)
   }
-}
-
-private final class BundleToken {
-  static let bundle: Bundle = {
-    var bundle: Bundle
-    #if SWIFT_PACKAGE
-    bundle = Bundle.module
-    #else
-    bundle = Bundle(for: BundleToken.self)
-    #endif
-    if let resource = bundle.resourcePath, let resourceBundle = Bundle(path: resource + "/KinescopeSDK.bundle") {
-        bundle = resourceBundle
-    }
-    return bundle
-  }()
 }
