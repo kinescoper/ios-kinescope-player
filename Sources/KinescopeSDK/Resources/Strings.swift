@@ -115,22 +115,7 @@ extension L10n {
     if clientFormat != key {
         return String(format: clientFormat, locale: Locale.current, arguments: args)
     }
-    let sdkFormat = BundleToken.bundle.localizedString(forKey: key, value: nil, table: table)
+    let sdkFormat = Bundle.kinescopeResources.localizedString(forKey: key, value: nil, table: table)
     return String(format: sdkFormat, locale: Locale.current, arguments: args)
   }
-}
-
-private final class BundleToken {
-  static let bundle: Bundle = {
-    var bundle: Bundle
-    #if SWIFT_PACKAGE
-    bundle = Bundle.module
-    #else
-    bundle = Bundle(for: BundleToken.self)
-    #endif
-    if let resource = bundle.resourcePath, let resourceBundle = Bundle(path: resource + "/KinescopeSDK.bundle") {
-        bundle = resourceBundle
-    }
-    return bundle
-  }()
 }

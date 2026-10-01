@@ -191,6 +191,8 @@ extension SideMenu: SideMenuBarDelegate {
 private extension SideMenu {
 
     func setupInitialState() {
+        // VoiceOver stays in the menu, not on the chrome under it.
+        accessibilityViewIsModal = true
         backgroundColor = config.backgroundColor
 
         configureBar()

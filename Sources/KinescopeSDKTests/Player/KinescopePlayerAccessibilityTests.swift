@@ -120,6 +120,14 @@ final class KinescopePlayerAccessibilityTests: XCTestCase {
         XCTAssertEqual(labels, ["Up", "Shut"])
     }
 
+    func testSideMenuIsModalForVoiceOver() {
+        let menu = SideMenu(config: .default,
+                            model: .init(title: "Settings", isRoot: true, isDownloadable: false, items: []),
+                            theme: makeTheme())
+
+        XCTAssertTrue(menu.accessibilityViewIsModal)
+    }
+
     // MARK: - Tap targets
 
     func testOptionsTakeTapsOverA44PointArea() throws {
