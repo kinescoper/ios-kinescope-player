@@ -255,8 +255,8 @@ final class KinescopePlayerViewSnapshotRenderer: XCTestCase {
         theme.colors.timelineThumbHalo = nil
         theme.colors.iconPressed = UIColor.white.withAlphaComponent(0.64)
         theme.startScreen = .posterAndPlayButton
-        theme.playPauseAnimation = .morph
-        theme.chromePlayButton = .glyphOnly
+        theme.playPauseAnimation = .android
+        theme.chromePlayButton = .android
         theme.menu = .card
         theme.seekFeedback = .sideArea
         return theme

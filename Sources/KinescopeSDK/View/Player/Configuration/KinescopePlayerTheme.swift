@@ -244,24 +244,61 @@ public extension KinescopePlayerTheme {
 
     /// How the play/pause button changes its glyph and answers a tap.
     struct PlayPauseAnimation {
-        /// `true` draws the glyph as a shape that morphs between the play triangle and the pause bars, sized
-        /// like the play and pause images; `false` swaps the images.
+
+        /// The morphing shape.
+        public enum Glyph {
+            /// Two quadrilaterals sized like the play and pause images, with rounded corners.
+            case bars
+            /// The Kinescope glyphs, the same paths as the Android SDK (`ic_play_pause_morph`): the play
+            /// triangle's halves become two rounded bars, in a square of 24 × the button's glyph scale; after the
+            /// end the replay glyph (`ic_controls_rewind`) takes their place.
+            case kinescope
+        }
+
+        /// `true` draws the glyph as a shape that morphs between play and pause; `false` swaps the images.
         public var morphsGlyph: Bool
         /// Length of the morph and of the pressed state fading out after a tap. `0`: no animation.
         public var duration: TimeInterval
-        /// Rounding of the morphing shape's corners.
+        /// Rounding of the ``Glyph/bars`` corners.
         public var glyphCornerRadius: CGFloat
+        public var glyph: Glyph
+        /// Pace of the morph.
+        public var timingFunction: CAMediaTimingFunction
+        /// Zoom of a glyph-only button while pressed, in place of ``Colors/iconPressed``. `1`: no zoom.
+        public var pressScale: CGFloat
+        /// Length of the zoom in and out.
+        public var pressDuration: TimeInterval
 
-        public init(morphsGlyph: Bool, duration: TimeInterval, glyphCornerRadius: CGFloat = 1) {
+        public init(morphsGlyph: Bool,
+                    duration: TimeInterval,
+                    glyphCornerRadius: CGFloat = 1,
+                    glyph: Glyph = .bars,
+                    timingFunction: CAMediaTimingFunction = CAMediaTimingFunction(name: .easeInEaseOut),
+                    pressScale: CGFloat = 1,
+                    pressDuration: TimeInterval = 0) {
             self.morphsGlyph = morphsGlyph
             self.duration = duration
             self.glyphCornerRadius = glyphCornerRadius
+            self.glyph = glyph
+            self.timingFunction = timingFunction
+            self.pressScale = pressScale
+            self.pressDuration = pressDuration
         }
 
         /// The SDK's own behavior: the images swap, the pressed state goes at once.
         public static let none = PlayPauseAnimation(morphsGlyph: false, duration: 0)
         /// Like Android's media3 player: a 200 ms morph, the pressed state fading out as long.
         public static let morph = PlayPauseAnimation(morphsGlyph: true, duration: 0.2)
+        /// Like the Kinescope Android SDK (`KinescopePlayPauseMorphView`): the Kinescope glyphs morph in 83 ms
+        /// with `fast_out_slow_in`, a press zooms the glyph to 108% in 90 ms (decelerating) and back.
+        public static let android = PlayPauseAnimation(
+            morphsGlyph: true,
+            duration: 0.083,
+            glyph: .kinescope,
+            timingFunction: CAMediaTimingFunction(controlPoints: 0.4, 0, 0.2, 1),
+            pressScale: 1.08,
+            pressDuration: 0.09
+        )
     }
 
 }
@@ -281,17 +318,31 @@ public extension KinescopePlayerTheme {
         public var glyphScale: CGFloat
         /// Shift of the glyph from the button center.
         public var glyphOffset: UIOffset
+        /// Like the Android SDK: the button stays on screen while paused or after the end, also when the chrome
+        /// hides, and goes away while the loading indicator spins.
+        public var showsWhilePaused: Bool
 
-        public init(diameter: CGFloat, background: UIColor, glyphScale: CGFloat, glyphOffset: UIOffset = .zero) {
+        public init(diameter: CGFloat,
+                    background: UIColor,
+                    glyphScale: CGFloat,
+                    glyphOffset: UIOffset = .zero,
+                    showsWhilePaused: Bool = false) {
             self.diameter = diameter
             self.background = background
             self.glyphScale = glyphScale
             self.glyphOffset = glyphOffset
+            self.showsWhilePaused = showsWhilePaused
         }
 
         /// Figma «Player» `M / Play` in the paused `Controls` (`2908:16201`): a 56-point glyph without a circle,
         /// a 24-point design system icon drawn like an instance resized from 24 to 56.
         public static let glyphOnly = PlayButton(diameter: 56, background: .clear, glyphScale: 56.0 / 24.0)
+
+        /// The Android SDK's center control (`kinescope_play_pause_size` 56, glyph inset 11): a 56-point button
+        /// without a circle with the ``PlayPauseAnimation/Glyph/kinescope`` glyph in a 34-point square, shown
+        /// while paused also without the chrome.
+        public static let android = PlayButton(diameter: 56, background: .clear, glyphScale: 34.0 / 24.0,
+                                               showsWhilePaused: true)
     }
 
 }

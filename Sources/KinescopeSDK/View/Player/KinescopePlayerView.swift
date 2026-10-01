@@ -117,11 +117,14 @@ public class KinescopePlayerView: UIView {
         case .playing:
             controlPanel?.isHidden = false
             overlay?.isHidden = false
+            overlay?.set(loading: false)
             overlay?.set(playing: true)
             progressView.showVideoProgress(isLoading: false)
         case .paused:
+            overlay?.set(loading: false)
             overlay?.set(playing: false)
         case .waitingToPlayAtSpecifiedRate:
+            overlay?.set(loading: true)
             overlay?.set(playing: false)
             progressView.showVideoProgress(isLoading: true)
         @unknown default:

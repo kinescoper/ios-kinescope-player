@@ -233,10 +233,10 @@ final class KinescopePlayerAccessibilityTests: XCTestCase {
     }
 
     func testMorphAnimatesThePathWhenOnScreen() throws {
-        let glyph = PlayPauseGlyphView(playSize: CGSize(width: 14, height: 16),
-                                       pauseSize: CGSize(width: 12, height: 14),
-                                       duration: 0.2,
-                                       cornerRadius: 1)
+        let glyph = PlayPauseGlyphView(shape: .bars(playSize: CGSize(width: 14, height: 16),
+                                                     pauseSize: CGSize(width: 12, height: 14),
+                                                     cornerRadius: 1),
+                                       duration: 0.2)
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 100, height: 100))
         window.addSubview(glyph)
         glyph.frame = CGRect(x: 0, y: 0, width: 14, height: 16)

@@ -29,7 +29,8 @@ final class PlayerOverlayView: UIControl {
     private(set) var seekForwardArea: SeekFeedbackView?
     private(set) var seekBackwardArea: SeekFeedbackView?
     private let nameView: VideoNameView
-    private let contentView = UIView()
+    /// Dimming, title and play button; shown with the chrome, the start screen or a paused button.
+    let contentView = UIView()
     private let config: KinescopePlayerOverlayConfiguration
     private let theme: KinescopePlayerTheme
     private weak var delegate: PlayerOverlayViewDelegate?
@@ -72,15 +73,26 @@ final class PlayerOverlayView: UIControl {
                 return
             }
             UIView.animate(withDuration: 0.1) {
-                self.contentView.alpha = self.isSelected ? 1.0 : .zero
+                self.updateContentVisibility()
             }
         }
     }
 
-    /// The play button is on screen: the chrome is shown or the start screen is.
+    /// The play button is on screen: the chrome is shown, the start screen is, or playback is paused with
+    /// ``KinescopePlayerTheme/PlayButton/showsWhilePaused``.
     private var isPlayButtonShown: Bool {
-        isSelected || isStartScreen
+        isSelected || isStartScreen || isShownWhilePaused
     }
+
+    /// Paused or ended, without the chrome, like the Android SDK.
+    private var isShownWhilePaused: Bool {
+        theme.chromePlayButton?.showsWhilePaused == true && !isPlaying && !isLoading
+    }
+
+    /// The loading indicator spins: a button that shows while paused goes away meanwhile.
+    private(set) var isLoading = false
+    /// Playback reached the end: the ``KinescopePlayerTheme/PlayPauseAnimation/Glyph/kinescope`` glyph shows replay.
+    private(set) var isEnded = false
 
     // The play button's pressed state; taps themselves stay with the gesture recognizers.
 
@@ -115,6 +127,11 @@ final class PlayerOverlayView: UIControl {
         let style = playButtonStyle
         let isGlyphOnly = style.isGlyphOnly
         let pressedDiameter = theme.metrics.playButtonPressedDiameter
+        let animation = theme.playPauseAnimation
+        if isGlyphOnly && animation.pressScale != 1 {
+            zoomGlyph(pressed: pressed)
+            return
+        }
         guard isGlyphOnly
             ? colors.iconPressed != nil
             : colors.playButtonBackgroundPressed != nil || colors.playButtonPressedOverlay != nil
@@ -150,6 +167,25 @@ final class PlayerOverlayView: UIControl {
         }
     }
 
+    /// The Android SDK's press: the glyph zooms in while held and back on release, decelerating.
+    private func zoomGlyph(pressed: Bool) {
+        isPlayButtonPressed = pressed
+        let animation = theme.playPauseAnimation
+        let scale = glyphBaseScale * (pressed ? animation.pressScale : 1)
+        let changes = {
+            let transform = CGAffineTransform(scaleX: scale, y: scale)
+            self.playPauseGlyphView?.transform = transform
+            self.playPauseImageView.transform = transform
+        }
+        guard animation.pressDuration > 0, window != nil else {
+            changes()
+            return
+        }
+        UIView.animate(withDuration: animation.pressDuration, delay: 0,
+                       options: [.beginFromCurrentState, .allowUserInteraction, .curveEaseOut],
+                       animations: changes)
+    }
+
     /// The pressed state of a tap that has already ended, as VoiceOver's activation: in, then fading out.
     func flashPlayButtonPressed() {
         setPlayButtonPressed(true)
@@ -172,9 +208,8 @@ final class PlayerOverlayView: UIControl {
             return
         }
         isStartScreen = shown
-        contentView.backgroundColor = shown ? .clear : config.backgroundColor
         nameView.isHidden = shown
-        contentView.alpha = isPlayButtonShown ? 1.0 : .zero
+        updateContentVisibility()
         applyPlayButtonStyle()
         playButtonElement.update(isPlaying: isPlaying)
     }
@@ -235,7 +270,33 @@ extension PlayerOverlayView: PlayerOverlayInput {
 
     func set(playing: Bool) {
         self.isPlaying = playing
+        if playing {
+            isEnded = false
+        }
         updatePlayPauseImage(animated: true)
+        updateContentVisibility()
+    }
+
+    /// Playback reached the end, or left it by a seek.
+    func set(ended: Bool) {
+        guard isEnded != ended else {
+            return
+        }
+        isEnded = ended
+        if ended {
+            isPlaying = false
+        }
+        updatePlayPauseImage(animated: false)
+        updateContentVisibility()
+    }
+
+    /// The loading indicator spins or stops; a button shown while paused hides meanwhile.
+    func set(loading: Bool) {
+        guard isLoading != loading else {
+            return
+        }
+        isLoading = loading
+        updateContentVisibility()
     }
 }
 
@@ -331,11 +392,33 @@ private extension PlayerOverlayView {
         playPressedCircle.transform = .identity
         isPlayButtonPressed = false
         setPlayGlyphTint(nil)
-        // The morphing glyph is built at the start screen's scale.
-        let start = startPlayButtonStyle
-        let ratio = theme.icons.custom(.play) != nil && start.glyphScale > 0 ? style.glyphScale / start.glyphScale : 1
-        playPauseGlyphView?.transform = CGAffineTransform(scaleX: ratio, y: ratio)
+        playPauseGlyphView?.transform = CGAffineTransform(scaleX: glyphBaseScale, y: glyphBaseScale)
+        playPauseImageView.transform = .identity
         updatePlayPauseImage(animated: false)
+    }
+
+    /// The morphing glyph is built at the start screen's scale; the chrome's button scales it.
+    var glyphBaseScale: CGFloat {
+        let start = startPlayButtonStyle
+        let drawsOwnGlyph = theme.playPauseAnimation.glyph == .kinescope
+        guard start.glyphScale > 0, drawsOwnGlyph || theme.icons.custom(.play) != nil else {
+            return 1
+        }
+        return playButtonStyle.glyphScale / start.glyphScale
+    }
+
+    /// Shows the chrome's dimming and title only with the chrome; the play button also on the start screen and,
+    /// with ``KinescopePlayerTheme/PlayButton/showsWhilePaused``, while paused.
+    func updateContentVisibility() {
+        let chrome = isSelected && !isStartScreen
+        contentView.alpha = isPlayButtonShown ? 1.0 : .zero
+        contentView.backgroundColor = chrome ? config.backgroundColor : .clear
+        nameView.alpha = chrome ? 1 : 0
+        let buttonAlpha: CGFloat = isLoading && theme.chromePlayButton?.showsWhilePaused == true && !isStartScreen
+            ? 0 : 1
+        [playBackgroundCircle, playPressedCircle, playPauseImageView].forEach { $0.alpha = buttonAlpha }
+        playPauseGlyphView?.alpha = buttonAlpha
+        playButtonElement.update(isPlaying: isPlaying)
     }
 
     /// `nil`: the glyph's own tint.
@@ -345,16 +428,23 @@ private extension PlayerOverlayView {
         playPauseGlyphView?.tintColor = tint
     }
 
-    /// Draws the glyph in place of the images, as big as they are.
+    /// Draws the glyph in place of the images: as big as they are, or the Kinescope glyph in a square of 24 × the
+    /// start screen's glyph scale.
     func configurePlayPauseGlyphView() {
         let scale = theme.metrics.playButtonGlyphScale
-        let playSize = themedGlyph(config.playImage, icon: .play, scale: scale).size
-        let pauseSize = themedGlyph(config.pauseImage, icon: .pause, scale: scale).size
         let animation = theme.playPauseAnimation
-        let glyphView = PlayPauseGlyphView(playSize: playSize,
-                                           pauseSize: pauseSize,
+        let shape: PlayPauseGlyphView.Shape
+        switch animation.glyph {
+        case .bars:
+            shape = .bars(playSize: themedGlyph(config.playImage, icon: .play, scale: scale).size,
+                          pauseSize: themedGlyph(config.pauseImage, icon: .pause, scale: scale).size,
+                          cornerRadius: animation.glyphCornerRadius)
+        case .kinescope:
+            shape = .kinescope(side: KinescopeGlyphPaths.playPauseViewport.width * scale)
+        }
+        let glyphView = PlayPauseGlyphView(shape: shape,
                                            duration: animation.duration,
-                                           cornerRadius: animation.glyphCornerRadius)
+                                           timingFunction: animation.timingFunction)
         if let tint = theme.colors.playButtonIcon {
             glyphView.tintColor = tint
         }
@@ -371,7 +461,11 @@ private extension PlayerOverlayView {
     func updatePlayPauseImage(animated: Bool) {
         playButtonElement.update(isPlaying: isPlaying)
         if let playPauseGlyphView {
-            playPauseGlyphView.set(playing: isPlaying, animated: animated)
+            if isEnded {
+                playPauseGlyphView.setReplay()
+            } else {
+                playPauseGlyphView.set(playing: isPlaying, animated: animated)
+            }
         }
         let scale = playButtonStyle.glyphScale
         playPauseImageView.image = isPlaying

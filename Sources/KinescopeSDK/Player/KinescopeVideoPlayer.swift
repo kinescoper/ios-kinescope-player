@@ -553,6 +553,7 @@ private extension KinescopeVideoPlayer {
             }
             analytic?.send(event: .end)
             if !config.looped {
+                view?.overlay?.set(ended: true)
                 delegate?.playerDidFinish()
             }
         }
@@ -691,6 +692,7 @@ extension KinescopeVideoPlayer: KinescopePlayerViewDelegate {
 
     func didSeek(to position: Double) {
         isPreparingSeek = true
+        view?.overlay?.set(ended: false)
 
         guard let duration = strategy.player.durationSeconds else {
             return
