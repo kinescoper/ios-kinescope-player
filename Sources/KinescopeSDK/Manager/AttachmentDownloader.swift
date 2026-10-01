@@ -194,7 +194,7 @@ private extension AttachmentDownloader {
         var isDir: ObjCBool = true
         if !FileManager.default.fileExists(atPath: attachmentsUrl.path, isDirectory: &isDir) {
             do {
-                try FileManager.default.createDirectory(at: attachmentsUrl, withIntermediateDirectories: false, attributes: nil)
+                try FileManager.default.createDirectory(at: attachmentsUrl, withIntermediateDirectories: true, attributes: nil)
             } catch {
                 Kinescope.shared.logger?.log(error: error, level: KinescopeLoggerLevel.network)
                 return nil
