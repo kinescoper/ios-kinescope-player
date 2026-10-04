@@ -149,6 +149,21 @@ final class KinescopePlayerAndroidPlayPauseTests: XCTestCase {
         XCTAssertEqual(glyph.alpha, 1)
     }
 
+    func testBufferingAfterPlayKeepsThePauseGlyph() throws {
+        let view = makePlayerView()
+        let overlay = try XCTUnwrap(view.overlay)
+        let glyph = try XCTUnwrap(overlay.playPauseGlyphView)
+        overlay.set(playing: true)
+        let morph = glyph.layer.sublayers?.first?.animation(forKey: "morph")
+
+        view.change(timeControlStatus: .waitingToPlayAtSpecifiedRate)
+        XCTAssertTrue(glyph.isPlaying)
+
+        view.change(timeControlStatus: .playing)
+        XCTAssertTrue(glyph.isPlaying)
+        XCTAssertTrue(glyph.layer.sublayers?.first?.animation(forKey: "morph") === morph, "the one morph runs on")
+    }
+
     func testReplayAfterTheEnd() throws {
         let view = makePlayerView()
         let overlay = try XCTUnwrap(view.overlay)

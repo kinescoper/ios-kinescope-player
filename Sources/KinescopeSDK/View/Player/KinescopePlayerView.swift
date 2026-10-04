@@ -124,8 +124,10 @@ public class KinescopePlayerView: UIView {
             overlay?.set(loading: false)
             overlay?.set(playing: false)
         case .waitingToPlayAtSpecifiedRate:
+            // The player means to play (a rate above zero): the glyph stays pause, like the Android SDK, instead of
+            // morphing back to play and again to pause once the data comes.
             overlay?.set(loading: true)
-            overlay?.set(playing: false)
+            overlay?.set(playing: true)
             progressView.showVideoProgress(isLoading: true)
         @unknown default:
             break
