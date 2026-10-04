@@ -42,6 +42,18 @@ final class KinescopePlayerAndroidPlayPauseTests: XCTestCase {
         XCTAssertEqual(play.count, 1 + 30 + 1 + 1 + 6 + 1)
     }
 
+    func testPlayHasNoSeamWhereItsHalvesOverlap() {
+        let viewport = CGRect(x: 0, y: 0, width: 24, height: 24)
+        let play = KinescopeGlyphPaths.playPause(playing: false, in: viewport)
+
+        // The halves overlap at x 12.42…13.62; a non-zero fill must cover it like the rest of the triangle.
+        for x in stride(from: 12.5, through: 13.5, by: 0.25) {
+            XCTAssertTrue(play.contains(CGPoint(x: x, y: 12), using: .winding), "seam at x \(x)")
+        }
+        XCTAssertTrue(play.contains(CGPoint(x: 8, y: 12), using: .winding))
+        XCTAssertTrue(play.contains(CGPoint(x: 18, y: 12), using: .winding))
+    }
+
     func testReplayPathIsTheRewindDrawable() {
         let path = KinescopeGlyphPaths.replay(in: CGRect(x: 0, y: 0, width: 48, height: 48)).boundingBoxOfPath
 

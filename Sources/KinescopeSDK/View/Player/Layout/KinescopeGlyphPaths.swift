@@ -76,13 +76,47 @@ enum KinescopeGlyphPaths {
     ].joined(separator: " ")
 
     /// Play or pause as one path in `rect`: the viewport scaled to fit and centered.
+    ///
+    /// The drawables' halves wind in opposite directions; Android draws them as two paths, but in one non-zero
+    /// fill their overlap (x 12.4…13.6 of the triangle) cancels out to a seam. The right parts of both shapes are
+    /// reversed, so the halves wind alike and the morph still pairs the same points.
     static func playPause(playing: Bool, in rect: CGRect) -> CGPath {
-        let parts = playing ? [pauseLeft, pauseRight] : [playLeft, playRight]
-        return path(parts, viewport: playPauseViewport, in: rect)
+        let (left, right) = playing ? (pauseLeft, pauseRight) : (playLeft, playRight)
+        let path = CGMutablePath()
+        path.addPath(Self.path([left], viewport: playPauseViewport, in: rect))
+        path.addPath(reversed(Self.path([right], viewport: playPauseViewport, in: rect)))
+        return path
     }
 
     static func replay(in rect: CGRect) -> CGPath {
         path([replay], viewport: replayViewport, in: rect)
+    }
+
+    /// One closed subpath of `M` and cubic curves, drawn the other way round.
+    static func reversed(_ path: CGPath) -> CGPath {
+        var start = CGPoint.zero
+        var curves: [(control1: CGPoint, control2: CGPoint, from: CGPoint)] = []
+        var current = CGPoint.zero
+        path.applyWithBlock { element in
+            let points = element.pointee.points
+            switch element.pointee.type {
+            case .moveToPoint:
+                start = points[0]
+                current = start
+            case .addCurveToPoint:
+                curves.append((points[0], points[1], current))
+                current = points[2]
+            default:
+                break
+            }
+        }
+        let reversed = CGMutablePath()
+        reversed.move(to: current)
+        for curve in curves.reversed() {
+            reversed.addCurve(to: curve.from, control1: curve.control2, control2: curve.control1)
+        }
+        reversed.closeSubpath()
+        return reversed
     }
 
     static func path(_ data: [String], viewport: CGSize, in rect: CGRect) -> CGPath {
