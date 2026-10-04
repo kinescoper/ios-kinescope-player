@@ -56,6 +56,8 @@ public class KinescopeVideoPlayer: KinescopePlayer, KinescopePlaybackControllabl
     private var isSeeking = false
     private var isPreparingSeek = false
     private var isPlaying = false
+    /// Playback has started at least once: a view attached later skips its start screen.
+    private var hasStartedPlayback = false
     private var isOverlayed = false
     private var savedTime: CMTime = .zero
     private weak var miniView: KinescopePlayerView?
@@ -190,6 +192,10 @@ public class KinescopeVideoPlayer: KinescopePlayer, KinescopePlaybackControllabl
         }
         view.set(options: options)
         view.pipController?.delegate = pipDelegate
+        if hasStartedPlayback {
+            view.skipStartScreen()
+        }
+        syncChrome(of: view)
         updateTimeline()
         updateLiveIndicator()
         observePlaybackTime()
@@ -454,6 +460,9 @@ private extension KinescopeVideoPlayer {
         let observerFactory = TimeControlStatusObserver(playerBody: self,
                                                         timeControlStatusChanged: { [weak self] status in
             self?.isPlaying = status == .playing
+            if status == .playing {
+                self?.hasStartedPlayback = true
+            }
         })
         kvoBag.addObserver(for: .playerTimeControlStatus, using: .init(wrappedFactory: observerFactory))
     }
@@ -544,6 +553,7 @@ private extension KinescopeVideoPlayer {
             }
             analytic?.send(event: .end)
             if !config.looped {
+                view?.overlay?.set(ended: true)
                 delegate?.playerDidFinish()
             }
         }
@@ -602,6 +612,20 @@ private extension KinescopeVideoPlayer {
                                                                item: item,
                                                                error: error,
                                                                willRetry: willRetry))
+    }
+
+    /// Brings a freshly attached view to the player's state. The full screen view is attached to a player that is
+    /// already loaded and maybe playing, so no status change comes to unhide its overlay: without it there is no
+    /// play/pause button and no tap target to bring the control bar back after it hides.
+    func syncChrome(of view: KinescopePlayerView) {
+        if let video {
+            view.overlay?.set(title: video.title, subtitle: video.description)
+        }
+        guard strategy.player.isReadyToPlay else {
+            return
+        }
+        view.stopLoader()
+        view.change(timeControlStatus: strategy.player.timeControlStatus)
     }
 
     func restoreView() {
@@ -668,6 +692,7 @@ extension KinescopeVideoPlayer: KinescopePlayerViewDelegate {
 
     func didSeek(to position: Double) {
         isPreparingSeek = true
+        view?.overlay?.set(ended: false)
 
         guard let duration = strategy.player.durationSeconds else {
             return
@@ -689,6 +714,9 @@ extension KinescopeVideoPlayer: KinescopePlayerViewDelegate {
         performSeek(to: time)
     }
 
+    /// A double tap on a side of the video seeks this far.
+    static let fastSeekInterval: TimeInterval = 15
+
     func didFastForward() {
         guard let duration = strategy.player.durationSeconds else {
             return
@@ -696,7 +724,7 @@ extension KinescopeVideoPlayer: KinescopePlayerViewDelegate {
 
         Kinescope.shared.logger?.log(message: "fast forward +15s", level: KinescopeLoggerLevel.player)
 
-        time = min(duration, time + 15)
+        time = min(duration, time + Self.fastSeekInterval)
         analytic?.send(event: .seek)
         performSeek(to: time)
 
@@ -706,7 +734,7 @@ extension KinescopeVideoPlayer: KinescopePlayerViewDelegate {
     func didFastBackward() {
         Kinescope.shared.logger?.log(message: "fast backward -15s", level: KinescopeLoggerLevel.player)
 
-        time = max(time - 15.0, .zero)
+        time = max(time - Self.fastSeekInterval, .zero)
         analytic?.send(event: .seek)
         performSeek(to: time)
 
@@ -750,8 +778,7 @@ extension KinescopeVideoPlayer: KinescopePlayerViewDelegate {
                     return
                 }
 
-                view.overlay?.set(title: video.title, subtitle: video.description)
-                view.stopLoader(withPreview: strategy.player.isReadyToPlay)
+                // `view` is the inline view here; the full screen one is attached and synced by now.
                 restoreView()
             }
         }

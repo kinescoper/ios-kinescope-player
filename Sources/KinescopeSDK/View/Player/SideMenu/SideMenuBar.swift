@@ -32,14 +32,16 @@ final class SideMenuBar: UIView {
     // MARK: - Properties
 
     private let config: KinescopeSideMenuBarConfiguration
+    private let theme: KinescopePlayerTheme
     private let model: Model
 
     weak var delegate: SideMenuBarDelegate?
 
     // MARK: - Init
 
-    init(config: KinescopeSideMenuBarConfiguration, model: Model) {
+    init(config: KinescopeSideMenuBarConfiguration, theme: KinescopePlayerTheme = .default, model: Model) {
         self.config = config
+        self.theme = theme
         self.model = model
         super.init(frame: .zero)
         setupInitialState()
@@ -50,7 +52,7 @@ final class SideMenuBar: UIView {
     }
 
     override var intrinsicContentSize: CGSize {
-        .init(width: .greatestFiniteMagnitude, height: config.preferedHeight)
+        .init(width: .greatestFiniteMagnitude, height: theme.menu.isCard ? theme.menu.rowHeight : config.preferedHeight)
     }
 
 }
@@ -81,6 +83,10 @@ private extension SideMenuBar {
 private extension SideMenuBar {
 
     func setupInitialState() {
+        if theme.menu.isCard {
+            setupCardState()
+            return
+        }
 
         configureTitle()
         configureCloseButton()
@@ -120,6 +126,31 @@ private extension SideMenuBar {
 
     }
 
+    /// Figma «Player» menus: a row with the back glyph 12 from the edge and the title 4 after it, no close button;
+    /// the whole row goes back. A root level other than settings shows its title at the row padding.
+    func setupCardState() {
+        configureTitle()
+        titleView.translatesAutoresizingMaskIntoConstraints = false
+        let padding = theme.menu.contentInsets
+        if model.isRoot {
+            NSLayoutConstraint.activate([
+                titleView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: padding.left),
+                titleView.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -padding.right),
+                titleView.centerYAnchor.constraint(equalTo: centerYAnchor)
+            ])
+            return
+        }
+        configureBackButton()
+        NSLayoutConstraint.activate([
+            backButton.centerYAnchor.constraint(equalTo: centerYAnchor),
+            backButton.leadingAnchor.constraint(equalTo: leadingAnchor, constant: max(padding.left - 4, 0)),
+            titleView.leadingAnchor.constraint(equalTo: backButton.trailingAnchor, constant: 4),
+            titleView.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -padding.right),
+            titleView.centerYAnchor.constraint(equalTo: centerYAnchor)
+        ])
+        addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(onBackTapped)))
+    }
+
     func configureTitle() {
         let label = UILabel()
         label.font = config.titleFont
@@ -132,8 +163,10 @@ private extension SideMenuBar {
     }
 
     func configureCloseButton() {
-        let button = UIButton()
-        button.setImage(.image(named: "close"), for: .normal)
+        let button = HitAreaButton()
+        button.setImage(theme.icons.image(for: .menuClose), for: .normal)
+        button.accessibilityLabel = theme.accessibilityLabels.menuClose
+        button.tintColor = theme.colors.icon
 
         addSubview(button)
         button.squareSize(with: config.iconSize)
@@ -144,8 +177,10 @@ private extension SideMenuBar {
     }
 
     func configureBackButton() {
-        let button = UIButton()
-        button.setImage(.image(named: "back"), for: .normal)
+        let button = HitAreaButton()
+        button.setImage(theme.icons.image(for: .menuBack), for: .normal)
+        button.accessibilityLabel = theme.accessibilityLabels.menuBack
+        button.tintColor = theme.colors.icon
 
         addSubview(button)
         button.squareSize(with: config.iconSize)
@@ -168,6 +203,15 @@ private extension SideMenuBar {
         button.addTarget(nil, action: #selector(onDownloadAllTapped), for: .touchUpInside)
 
         self.downloadAllButton = button
+    }
+
+}
+
+/// A side menu icon button that takes taps at least 44 points wide and high.
+private final class HitAreaButton: UIButton {
+
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        minimumHitArea.contains(point)
     }
 
 }

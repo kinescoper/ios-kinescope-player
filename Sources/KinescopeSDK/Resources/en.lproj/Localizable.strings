@@ -41,3 +41,14 @@
 "Player.refresh" = "Refresh";
 "Player.error" = "Player error";
 "Player.soon" = "It's starting soon";
+
+// MARK: - Accessibility
+
+"Player.moreOptions" = "More options";
+"Player.pictureInPicture" = "Picture in Picture";
+"Player.timeline" = "Playback position";
+"Player.fastForward" = "Skip forward";
+"Player.fastBackward" = "Skip back";
+"Player.back" = "Back";
+"Player.close" = "Close";
+"Player.seekSeconds" = "%d sec";
